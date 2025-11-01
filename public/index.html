@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Catálogo de Prendas</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="header">
+        <h1>👗 Catálogo de Prendas</h1>
+        <div id="headerActions">
+            <button class="btn btn-cart" onclick="openModal('cartModal')">
+                🛒 Carrito (<span id="cartCount">0</span>)
+            </button>
+            <button class="btn btn-primary" onclick="openModal('loginModal')">Login Admin</button>
+        </div>
+    </div>
+
+    <div class="container">
+        <div id="catalogContent"></div>
+    </div>
+
+    <!-- Modal Login Admin -->
+    <div id="loginModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Login Administrador</h2>
+                <button class="close-btn" onclick="closeModal('loginModal')">&times;</button>
+            </div>
+            <form id="loginForm">
+                <div class="form-group">
+                    <label>Usuario</label>
+                    <input type="text" id="username" required>
+                </div>
+                <div class="form-group">
+                    <label>Contraseña</label>
+                    <input type="password" id="password" required>
+                </div>
+                <button type="submit" class="btn btn-primary" style="width: 100%">Iniciar Sesión</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal Producto Admin -->
+    <div id="productModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="productModalTitle">Nueva Prenda</h2>
+                <button class="close-btn" onclick="closeModal('productModal')">&times;</button>
+            </div>
+            <form id="productForm">
+                <input type="hidden" id="productId">
+                <div class="form-group">
+                    <label>Nombre</label>
+                    <input type="text" id="productName" required>
+                </div>
+                <div class="form-group">
+                    <label>Descripción</label>
+                    <textarea id="productDescription" required></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Precio (COP)</label>
+                    <input type="number" id="productPrice" required min="0" step="1000">
+                </div>
+                <div class="form-group">
+                    <label>Stock disponible</label>
+                    <input type="number" id="productStock" required min="0" value="10">
+                </div>
+                <div class="form-group">
+                    <label>URL de Imagen</label>
+                    <input type="url" id="productImage" placeholder="https://ejemplo.com/imagen.jpg" required>
+                </div>
+                <button type="submit" class="btn btn-primary" style="width: 100%">Guardar Prenda</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal Carrito -->
+    <div id="cartModal" class="modal">
+        <div class="modal-content cart-modal">
+            <div class="modal-header">
+                <h2>Tu Carrito de Compras</h2>
+                <button class="close-btn" onclick="closeModal('cartModal')">&times;</button>
+            </div>
+            <div id="cartContent"></div>
+        </div>
+    </div>
+
+    <!-- Modal Checkout -->
+    <div id="checkoutModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Finalizar Compra</h2>
+                <button class="close-btn" onclick="closeModal('checkoutModal')">&times;</button>
+            </div>
+            <form id="checkoutForm">
+                <div class="form-group">
+                    <label>Nombre Completo</label>
+                    <input type="text" id="customerName" required>
+                </div>
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="customerEmail" required>
+                </div>
+                <div class="form-group">
+                    <label>Teléfono</label>
+                    <input type="tel" id="customerPhone" required>
+                </div>
+                <div class="form-group">
+                    <label>Dirección de Envío</label>
+                    <textarea id="customerAddress" required rows="3"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Ciudad</label>
+                    <input type="text" id="customerCity" required>
+                </div>
+                <div class="checkout-total">
+                    <h3>Total a Pagar: <span id="checkoutTotal"></span></h3>
+                </div>
+                <button type="submit" class="btn btn-primary" style="width: 100%">Confirmar Pedido</button>
+            </form>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
