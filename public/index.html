@@ -17,8 +17,15 @@
         </div>
     </div>
 
+    <!-- Navegación Admin -->
+    <div id="adminNav" class="admin-nav" style="display: none;">
+        <button class="nav-btn active" onclick="showSection('products')">📦 Productos</button>
+        <button class="nav-btn" onclick="showSection('orders')">📋 Pedidos</button>
+    </div>
+
     <div class="container">
         <div id="catalogContent"></div>
+        <div id="ordersContent" style="display: none;"></div>
     </div>
 
     <!-- Modal Login Admin -->
@@ -122,6 +129,17 @@
             </form>
         </div>
     </div>
+
+    <!-- Modal Detalle de Orden (agregar antes del cierre de </body>) -->
+<div id="orderDetailModal" class="modal">
+    <div class="modal-content large-modal">
+        <div class="modal-header">
+            <h2>Detalle del Pedido</h2>
+            <button class="close-btn" onclick="closeModal('orderDetailModal')">&times;</button>
+        </div>
+        <div id="orderDetailContent"></div>
+    </div>
+</div>
 
     <script src="app.js"></script>
 </body>

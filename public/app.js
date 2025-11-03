@@ -4,7 +4,10 @@ const API_URL = '/api'; // En producción: 'https://tu-backend.clever-cloud.com/
 let isAdmin = false;
 let adminToken = null;
 let currentProducts = [];
+let currentOrders = [];
 let cart = [];
+let currentSection = 'products';
+let orderFilter = 'all';
 
 // ============= FUNCIONES DE API =============
 
@@ -119,6 +122,55 @@ async function loginAdmin(username, password) {
     }
 }
 
+async function fetchOrders() {
+    try {
+        const response = await fetch(`${API_URL}/orders`, {
+            headers: {
+                'Authorization': `Bearer ${adminToken}`
+            }
+        });
+        if (!response.ok) throw new Error('Error al cargar pedidos');
+        return await response.json();
+    } catch (error) {
+        console.error('Error:', error);
+        throw error;
+    }
+}
+
+async function fetchOrderDetail(orderId) {
+    try {
+        const response = await fetch(`${API_URL}/orders/${orderId}`, {
+            headers: {
+                'Authorization': `Bearer ${adminToken}`
+            }
+        });
+        if (!response.ok) throw new Error('Error al cargar detalle');
+        return await response.json();
+    } catch (error) {
+        console.error('Error:', error);
+        throw error;
+    }
+}
+
+async function updateOrderStatus(orderId, status) {
+    try {
+        const response = await fetch(`${API_URL}/orders/${orderId}/status`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${adminToken}`
+            },
+            body: JSON.stringify({ status })
+        });
+        
+        if (!response.ok) throw new Error('Error al actualizar estado');
+        return await response.json();
+    } catch (error) {
+        console.error('Error:', error);
+        throw error;
+    }
+}
+
 // ============= FUNCIONES DE CARRITO =============
 
 function addToCart(productId) {
@@ -189,14 +241,17 @@ function clearCart() {
 
 function renderHeader() {
     const actions = document.getElementById('headerActions');
+    const adminNav = document.getElementById('adminNav');
+    
     if (isAdmin) {
         actions.innerHTML = `
             <button class="btn btn-cart" onclick="openModal('cartModal')">
                 🛒 Carrito (<span id="cartCount">0</span>)
             </button>
-            <button class="btn btn-secondary" onclick="openProductModal()">+ Nueva Prenda</button>
+            <button class="btn btn-secondary" onclick="showSection('products'); openProductModal()">+ Nueva Prenda</button>
             <button class="btn btn-danger" onclick="logout()">Cerrar Sesión</button>
         `;
+        adminNav.style.display = 'flex';
     } else {
         actions.innerHTML = `
             <button class="btn btn-cart" onclick="openModal('cartModal')">
@@ -204,6 +259,7 @@ function renderHeader() {
             </button>
             <button class="btn btn-primary" onclick="openModal('loginModal')">Login Admin</button>
         `;
+        adminNav.style.display = 'none';
     }
     updateCartCount();
 }
@@ -334,6 +390,349 @@ function renderCart() {
     `;
 }
 
+function renderOrders() {
+    const content = document.getElementById('ordersContent');
+    
+    if (currentOrders.length === 0) {
+        content.innerHTML = `
+            <div class="empty-state">
+                <h3>No hay pedidos</h3>
+                <p>Los pedidos de los clientes aparecerán aquí</p>
+            </div>
+        `;
+        return;
+    }
+
+    const filteredOrders = orderFilter === 'all' 
+        ? currentOrders 
+        : currentOrders.filter(o => o.status === orderFilter);
+
+    const stats = {
+        total: currentOrders.length,
+        pending: currentOrders.filter(o => o.status === 'pending').length,
+        processing: currentOrders.filter(o => o.status === 'processing').length,
+        shipped: currentOrders.filter(o => o.status === 'shipped').length,
+        delivered: currentOrders.filter(o => o.status === 'delivered').length,
+        totalRevenue: currentOrders
+            .filter(o => o.status !== 'cancelled')
+            .reduce((sum, o) => sum + parseFloat(o.total), 0)
+    };
+
+    const statusNames = {
+        pending: 'Pendiente',
+        processing: 'Procesando',
+        shipped: 'Enviado',
+        delivered: 'Entregado',
+        cancelled: 'Cancelado'
+    };
+
+    content.innerHTML = `
+        <div class="orders-header">
+            <h2>📋 Gestión de Pedidos</h2>
+            <div class="orders-stats">
+                <div class="stat-card">
+                    <div class="stat-number">${stats.total}</div>
+                    <div class="stat-label">Total Pedidos</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">${stats.pending}</div>
+                    <div class="stat-label">Pendientes</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">$${stats.totalRevenue.toLocaleString('es-CO')}</div>
+                    <div class="stat-label">Ingresos</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="orders-filters">
+            <button class="filter-btn ${orderFilter === 'all' ? 'active' : ''}" onclick="filterOrders('all')">
+                Todos (${stats.total})
+            </button>
+            <button class="filter-btn ${orderFilter === 'pending' ? 'active' : ''}" onclick="filterOrders('pending')">
+                Pendientes (${stats.pending})
+            </button>
+            <button class="filter-btn ${orderFilter === 'processing' ? 'active' : ''}" onclick="filterOrders('processing')">
+                Procesando (${stats.processing})
+            </button>
+            <button class="filter-btn ${orderFilter === 'shipped' ? 'active' : ''}" onclick="filterOrders('shipped')">
+                Enviados (${stats.shipped})
+            </button>
+            <button class="filter-btn ${orderFilter === 'delivered' ? 'active' : ''}" onclick="filterOrders('delivered')">
+                Entregados (${stats.delivered})
+            </button>
+        </div>
+
+        <div class="orders-table">
+            <div class="order-row header">
+                <div class="order-cell">Nº Orden</div>
+                <div class="order-cell">Cliente</div>
+                <div class="order-cell">Email / Teléfono</div>
+                <div class="order-cell">Total</div>
+                <div class="order-cell">Estado</div>
+                <div class="order-cell">Fecha</div>
+                <div class="order-cell">Acciones</div>
+            </div>
+            ${filteredOrders.map(order => {
+                const date = new Date(order.created_at);
+                const formattedDate = date.toLocaleDateString('es-CO', { 
+                    year: 'numeric', 
+                    month: 'short', 
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+
+                return `
+                    <div class="order-row">
+                        <div class="order-cell" data-label="Nº Orden">
+                            <span class="order-number">${order.order_number}</span>
+                        </div>
+                        <div class="order-cell highlight" data-label="Cliente">
+                            ${order.customer_name}
+                        </div>
+                        <div class="order-cell" data-label="Contacto">
+                            ${order.customer_email}<br>
+                            <small>${order.customer_phone || 'N/A'}</small>
+                        </div>
+                        <div class="order-cell highlight" data-label="Total">
+                            $${parseFloat(order.total).toLocaleString('es-CO')}
+                        </div>
+                        <div class="order-cell" data-label="Estado">
+                            <span class="status-badge status-${order.status}">
+                                ${statusNames[order.status]}
+                            </span>
+                        </div>
+                        <div class="order-cell" data-label="Fecha">
+                            ${formattedDate}
+                        </div>
+                        <div class="order-cell" data-label="Acciones">
+                            <div class="order-actions">
+                                <button class="btn-icon" onclick="viewOrderDetail(${order.id})" title="Ver detalle">
+                                    👁️
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('')}
+        </div>
+    `;
+}
+
+async function renderOrderDetail(orderId) {
+    const content = document.getElementById('orderDetailContent');
+    content.innerHTML = '<div class="loading">Cargando detalle...</div>';
+
+    try {
+        const order = await fetchOrderDetail(orderId);
+        
+        const statusNames = {
+            pending: 'Pendiente',
+            processing: 'Procesando',
+            shipped: 'Enviado',
+            delivered: 'Entregado',
+            cancelled: 'Cancelado'
+        };
+
+        const date = new Date(order.created_at);
+        const formattedDate = date.toLocaleDateString('es-CO', { 
+            year: 'numeric', 
+            month: 'long', 
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+
+        content.innerHTML = `
+            <div class="order-detail-section">
+                <h3>Información del Pedido</h3>
+                <div class="order-info-grid">
+                    <div class="order-info-item">
+                        <div class="order-info-label">Número de Orden</div>
+                        <div class="order-info-value">${order.order_number}</div>
+                    </div>
+                    <div class="order-info-item">
+                        <div class="order-info-label">Estado</div>
+                        <div class="order-info-value">
+                            <span class="status-badge status-${order.status}">
+                                ${statusNames[order.status]}
+                            </span>
+                        </div>
+                    </div>
+                    <div class="order-info-item">
+                        <div class="order-info-label">Fecha del Pedido</div>
+                        <div class="order-info-value">${formattedDate}</div>
+                    </div>
+                    <div class="order-info-item">
+                        <div class="order-info-label">Total</div>
+                        <div class="order-info-value">$${parseFloat(order.total).toLocaleString('es-CO')}</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="order-detail-section">
+                <h3>Información del Cliente</h3>
+                <div class="order-info-grid">
+                    <div class="order-info-item">
+                        <div class="order-info-label">Nombre</div>
+                        <div class="order-info-value">${order.customer_name}</div>
+                    </div>
+                    <div class="order-info-item">
+                        <div class="order-info-label">Email</div>
+                        <div class="order-info-value">${order.customer_email}</div>
+                    </div>
+                    <div class="order-info-item">
+                        <div class="order-info-label">Teléfono</div>
+                        <div class="order-info-value">${order.customer_phone || 'No proporcionado'}</div>
+                    </div>
+                    <div class="order-info-item">
+                        <div class="order-info-label">Ciudad</div>
+                        <div class="order-info-value">${order.customer_city || 'No especificada'}</div>
+                    </div>
+                </div>
+                <div class="order-info-item" style="margin-top: 1rem;">
+                    <div class="order-info-label">Dirección de Envío</div>
+                    <div class="order-info-value">${order.customer_address || 'No proporcionada'}</div>
+                </div>
+            </div>
+
+            <div class="order-detail-section">
+                <h3>Productos del Pedido</h3>
+                <div class="order-items-list">
+                    ${order.items.map(item => `
+                        <div class="order-item-row">
+                            <div>
+                                <div class="order-item-name">${item.product_name}</div>
+                                <div class="order-item-details">
+                                    Cantidad: ${item.quantity} × $${parseFloat(item.product_price).toLocaleString('es-CO')}
+                                </div>
+                            </div>
+                            <div class="order-item-price">
+                                $${parseFloat(item.subtotal).toLocaleString('es-CO')}
+                            </div>
+                        </div>
+                    `).join('')}
+                    
+                    <div class="order-item-row" style="border-top: 2px solid #2d2d2d; margin-top: 1rem; padding-top: 1rem;">
+                        <div class="order-item-name">Subtotal</div>
+                        <div class="order-item-price">$${parseFloat(order.subtotal).toLocaleString('es-CO')}</div>
+                    </div>
+                    <div class="order-item-row">
+                        <div class="order-item-name">Envío</div>
+                        <div class="order-item-price">
+                            ${parseFloat(order.shipping) === 0 ? '¡Gratis!' : '$' + parseFloat(order.shipping).toLocaleString('es-CO')}
+                        </div>
+                    </div>
+                    <div class="order-item-row" style="font-size: 1.2rem;">
+                        <div class="order-item-name">Total</div>
+                        <div class="order-item-price">$${parseFloat(order.total).toLocaleString('es-CO')}</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="order-detail-section">
+                <h3>Actualizar Estado del Pedido</h3>
+                <div class="order-status-update">
+                    <div class="status-selector">
+                        <button class="btn btn-secondary ${order.status === 'pending' ? 'active' : ''}" 
+                                onclick="updateStatus(${order.id}, 'pending')">
+                            Pendiente
+                        </button>
+                        <button class="btn btn-primary ${order.status === 'processing' ? 'active' : ''}" 
+                                onclick="updateStatus(${order.id}, 'processing')">
+                            Procesando
+                        </button>
+                        <button class="btn btn-primary ${order.status === 'shipped' ? 'active' : ''}" 
+                                onclick="updateStatus(${order.id}, 'shipped')">
+                            Enviado
+                        </button>
+                        <button class="btn btn-secondary ${order.status === 'delivered' ? 'active' : ''}" 
+                                onclick="updateStatus(${order.id}, 'delivered')">
+                            Entregado
+                        </button>
+                        <button class="btn btn-danger ${order.status === 'cancelled' ? 'active' : ''}" 
+                                onclick="updateStatus(${order.id}, 'cancelled')">
+                            Cancelado
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+    } catch (error) {
+        content.innerHTML = `
+            <div class="empty-state">
+                <h3>Error al cargar detalle</h3>
+                <p>${error.message}</p>
+            </div>
+        `;
+    }
+}
+
+// ============= FUNCIONES DE NAVEGACIÓN =============
+
+function showSection(section) {
+    currentSection = section;
+    
+    document.querySelectorAll('.nav-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    
+    const catalogContent = document.getElementById('catalogContent');
+    const ordersContent = document.getElementById('ordersContent');
+    
+    if (section === 'products') {
+        catalogContent.style.display = 'block';
+        ordersContent.style.display = 'none';
+        document.querySelectorAll('.nav-btn')[0].classList.add('active');
+    } else if (section === 'orders') {
+        catalogContent.style.display = 'none';
+        ordersContent.style.display = 'block';
+        document.querySelectorAll('.nav-btn')[1].classList.add('active');
+        loadOrders();
+    }
+}
+
+function filterOrders(filter) {
+    orderFilter = filter;
+    renderOrders();
+}
+
+async function viewOrderDetail(orderId) {
+    openModal('orderDetailModal');
+    await renderOrderDetail(orderId);
+}
+
+async function updateStatus(orderId, newStatus) {
+    if (confirm(`¿Cambiar el estado del pedido?`)) {
+        try {
+            await updateOrderStatus(orderId, newStatus);
+            alert('Estado actualizado correctamente');
+            closeModal('orderDetailModal');
+            loadOrders();
+        } catch (error) {
+            alert('Error al actualizar estado');
+        }
+    }
+}
+
+async function loadOrders() {
+    const content = document.getElementById('ordersContent');
+    content.innerHTML = '<div class="loading">Cargando pedidos...</div>';
+    
+    try {
+        currentOrders = await fetchOrders();
+        renderOrders();
+    } catch (error) {
+        content.innerHTML = `
+            <div class="empty-state">
+                <h3>Error al cargar pedidos</h3>
+                <p>${error.message}</p>
+            </div>
+        `;
+    }
+}
+
 // ============= FUNCIONES DE MODALES =============
 
 function openModal(modalId) {
@@ -400,6 +799,10 @@ function proceedToCheckout() {
 
 function logout() {
     isAdmin = false;
+    adminToken = null;
+    currentSection = 'products';
+    document.getElementById('catalogContent').style.display = 'block';
+    document.getElementById('ordersContent').style.display = 'none';
     renderHeader();
     renderCatalog();
 }
@@ -425,19 +828,23 @@ async function loadProducts() {
 
 // ============= EVENT LISTENERS =============
 
-document.getElementById('loginForm').addEventListener('submit', (e) => {
+document.getElementById('loginForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     const username = document.getElementById('username').value;
     const password = document.getElementById('password').value;
     
-    // TODO: Implementar autenticación real con tu backend
-    if (username === 'admin' && password === 'admin123') {
-        isAdmin = true;
-        closeModal('loginModal');
-        renderHeader();
-        renderCatalog();
-        alert('Sesión iniciada correctamente');
-    } else {
+    try {
+        const result = await loginAdmin(username, password);
+        
+        if (result.success) {
+            isAdmin = true;
+            adminToken = result.token;
+            closeModal('loginModal');
+            renderHeader();
+            renderCatalog();
+            alert('Sesión iniciada correctamente');
+        }
+    } catch (error) {
         alert('Credenciales incorrectas');
     }
 });
@@ -486,10 +893,11 @@ document.getElementById('checkoutForm').addEventListener('submit', async (e) => 
     try {
         const result = await createOrder(orderData);
         if (result.success) {
-            alert(`¡Pedido realizado con éxito! 🎉\n\nNúmero de orden: ${result.orderId}\n\nRecibirás un email de confirmación pronto.`);
+            alert(`¡Pedido realizado con éxito! 🎉\n\nNúmero de orden: ${result.orderNumber}\n\nRecibirás un email de confirmación pronto.`);
             clearCart();
             closeModal('checkoutModal');
             document.getElementById('checkoutForm').reset();
+            loadProducts();
         }
     } catch (error) {
         alert('Error al procesar el pedido. Por favor intenta nuevamente.');
