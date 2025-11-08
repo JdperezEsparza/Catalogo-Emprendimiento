@@ -28,6 +28,19 @@
         <div id="ordersContent" style="display: none;"></div>
     </div>
 
+    <!-- Botón Flotante de WhatsApp -->
+    <a href="https://wa.me/573115564583?text=Hola%2C%20estoy%20interesado%20en%20sus%20prendas" 
+       class="whatsapp-float" 
+       target="_blank"
+       rel="noopener noreferrer"
+       title="Contáctanos por WhatsApp">
+        <svg viewBox="0 0 32 32" class="whatsapp-icon">
+            <path fill="currentColor" d="M16 0C7.164 0 0 7.164 0 16c0 2.827.744 5.584 2.155 8.001L.08 31.92l8.094-2.063A15.927 15.927 0 0016 32c8.836 0 16-7.164 16-16S24.836 0 16 0zm0 29.333c-2.547 0-5.042-.732-7.196-2.111l-.516-.312-5.348 1.363 1.402-5.135-.341-.534A13.267 13.267 0 012.667 16c0-7.364 5.969-13.333 13.333-13.333S29.333 8.636 29.333 16 23.364 29.333 16 29.333z"/>
+            <path fill="currentColor" d="M23.473 19.394c-.384-.192-2.267-1.119-2.619-1.247-.352-.128-.608-.192-.864.192-.256.384-.992 1.247-1.216 1.503-.224.256-.448.288-.832.096-.384-.192-1.621-.597-3.087-1.903-1.141-.992-1.912-2.219-2.136-2.603-.224-.384-.024-.592.168-.784.173-.171.384-.448.576-.672.192-.224.256-.384.384-.64.128-.256.064-.48-.032-.672-.096-.192-.864-2.075-1.184-2.843-.312-.747-.629-.646-.864-.658-.224-.011-.48-.013-.736-.013s-.672.096-1.024.48c-.352.384-1.344 1.312-1.344 3.199s1.376 3.711 1.568 3.967c.192.256 2.715 4.147 6.579 5.816.919.397 1.637.635 2.197.812.923.293 1.763.251 2.427.152.741-.111 2.267-.928 2.587-1.824.32-.896.32-1.664.224-1.824-.096-.16-.352-.256-.736-.448z"/>
+        </svg>
+        <span class="whatsapp-text">Contáctanos</span>
+    </a>
+
     <!-- Modal Login Admin -->
     <div id="loginModal" class="modal">
         <div class="modal-content">
@@ -130,16 +143,16 @@
         </div>
     </div>
 
-    <!-- Modal Detalle de Orden (agregar antes del cierre de </body>) -->
-<div id="orderDetailModal" class="modal">
-    <div class="modal-content large-modal">
-        <div class="modal-header">
-            <h2>Detalle del Pedido</h2>
-            <button class="close-btn" onclick="closeModal('orderDetailModal')">&times;</button>
+    <!-- Modal Detalle de Orden -->
+    <div id="orderDetailModal" class="modal">
+        <div class="modal-content large-modal">
+            <div class="modal-header">
+                <h2>Detalle del Pedido</h2>
+                <button class="close-btn" onclick="closeModal('orderDetailModal')">&times;</button>
+            </div>
+            <div id="orderDetailContent"></div>
         </div>
-        <div id="orderDetailContent"></div>
     </div>
-</div>
 
     <script src="app.js"></script>
 </body>
