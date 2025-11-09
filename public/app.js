@@ -1,5 +1,16 @@
-// Configuración - REEMPLAZAR CON TU URL DE API BACKEND
-const API_URL = '/api'; // En producción: 'https://tu-backend.clever-cloud.com/api'
+// Configuración
+const API_URL = '/api';
+
+// TU CONFIGURACIÓN DE PAGO - PERSONALIZA AQUÍ
+const PAYMENT_CONFIG = {
+    whatsappNumber: '573115564583',
+    nequiNumber: '311 556 4583',
+    nequiName: 'Tu Nombre Completo',
+    bancolombiaAccount: 'XXXX-XXXX-XX',
+    bancolombiaName: 'Tu Nombre Completo',
+    daviplataNumber: '311 556 4583',
+    daviplataName: 'Tu Nombre Completo'
+};
 
 let isAdmin = false;
 let adminToken = null;
@@ -97,6 +108,47 @@ async function createOrder(orderData) {
         });
         
         if (!response.ok) throw new Error('Error al crear orden');
+        return await response.json();
+    } catch (error) {
+        console.error('Error:', error);
+        throw error;
+    }
+}
+
+async function confirmPayment(orderId, notes) {
+    try {
+        const response = await fetch(`${API_URL}/orders/${orderId}/confirm-payment`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${adminToken}`
+            },
+            body: JSON.stringify({ payment_notes: notes })
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error);
+        }
+        return await response.json();
+    } catch (error) {
+        console.error('Error:', error);
+        throw error;
+    }
+}
+
+async function cancelOrder(orderId, reason) {
+    try {
+        const response = await fetch(`${API_URL}/orders/${orderId}/cancel`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${adminToken}`
+            },
+            body: JSON.stringify({ reason })
+        });
+        
+        if (!response.ok) throw new Error('Error al cancelar orden');
         return await response.json();
     } catch (error) {
         console.error('Error:', error);
@@ -409,16 +461,18 @@ function renderOrders() {
 
     const stats = {
         total: currentOrders.length,
+        pendingPayment: currentOrders.filter(o => o.status === 'pending_payment').length,
         pending: currentOrders.filter(o => o.status === 'pending').length,
         processing: currentOrders.filter(o => o.status === 'processing').length,
         shipped: currentOrders.filter(o => o.status === 'shipped').length,
         delivered: currentOrders.filter(o => o.status === 'delivered').length,
         totalRevenue: currentOrders
-            .filter(o => o.status !== 'cancelled')
+            .filter(o => o.status !== 'cancelled' && o.status !== 'pending_payment')
             .reduce((sum, o) => sum + parseFloat(o.total), 0)
     };
 
     const statusNames = {
+        pending_payment: 'Esperando Pago',
         pending: 'Pendiente',
         processing: 'Procesando',
         shipped: 'Enviado',
@@ -434,9 +488,9 @@ function renderOrders() {
                     <div class="stat-number">${stats.total}</div>
                     <div class="stat-label">Total Pedidos</div>
                 </div>
-                <div class="stat-card">
-                    <div class="stat-number">${stats.pending}</div>
-                    <div class="stat-label">Pendientes</div>
+                <div class="stat-card" style="border-left: 3px solid #f39c12;">
+                    <div class="stat-number" style="color: #f39c12;">${stats.pendingPayment}</div>
+                    <div class="stat-label">Esperando Pago</div>
                 </div>
                 <div class="stat-card">
                     <div class="stat-number">$${stats.totalRevenue.toLocaleString('es-CO')}</div>
@@ -449,17 +503,20 @@ function renderOrders() {
             <button class="filter-btn ${orderFilter === 'all' ? 'active' : ''}" onclick="filterOrders('all')">
                 Todos (${stats.total})
             </button>
+            <button class="filter-btn ${orderFilter === 'pending_payment' ? 'active' : ''}" onclick="filterOrders('pending_payment')">
+                ⏳ Esperando Pago (${stats.pendingPayment})
+            </button>
             <button class="filter-btn ${orderFilter === 'pending' ? 'active' : ''}" onclick="filterOrders('pending')">
-                Pendientes (${stats.pending})
+                📦 Pendientes (${stats.pending})
             </button>
             <button class="filter-btn ${orderFilter === 'processing' ? 'active' : ''}" onclick="filterOrders('processing')">
-                Procesando (${stats.processing})
+                🔄 Procesando (${stats.processing})
             </button>
             <button class="filter-btn ${orderFilter === 'shipped' ? 'active' : ''}" onclick="filterOrders('shipped')">
-                Enviados (${stats.shipped})
+                📮 Enviados (${stats.shipped})
             </button>
             <button class="filter-btn ${orderFilter === 'delivered' ? 'active' : ''}" onclick="filterOrders('delivered')">
-                Entregados (${stats.delivered})
+                ✅ Entregados (${stats.delivered})
             </button>
         </div>
 
@@ -484,7 +541,7 @@ function renderOrders() {
                 });
 
                 return `
-                    <div class="order-row">
+                    <div class="order-row ${order.status === 'pending_payment' ? 'pending-payment-row' : ''}">
                         <div class="order-cell" data-label="Nº Orden">
                             <span class="order-number">${order.order_number}</span>
                         </div>
@@ -511,6 +568,14 @@ function renderOrders() {
                                 <button class="btn-icon" onclick="viewOrderDetail(${order.id})" title="Ver detalle">
                                     👁️
                                 </button>
+                                ${order.status === 'pending_payment' ? `
+                                    <button class="btn-icon" style="background: #2ecc71;" onclick="confirmPaymentModal(${order.id})" title="Confirmar pago">
+                                        ✅
+                                    </button>
+                                    <button class="btn-icon" style="background: #e74c3c;" onclick="cancelOrderModal(${order.id})" title="Cancelar">
+                                        ❌
+                                    </button>
+                                ` : ''}
                             </div>
                         </div>
                     </div>
@@ -528,6 +593,7 @@ async function renderOrderDetail(orderId) {
         const order = await fetchOrderDetail(orderId);
         
         const statusNames = {
+            pending_payment: 'Esperando Pago',
             pending: 'Pendiente',
             processing: 'Procesando',
             shipped: 'Enviado',
@@ -543,6 +609,18 @@ async function renderOrderDetail(orderId) {
             hour: '2-digit',
             minute: '2-digit'
         });
+
+        let paidDate = '';
+        if (order.paid_at) {
+            const pDate = new Date(order.paid_at);
+            paidDate = pDate.toLocaleDateString('es-CO', { 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
 
         content.innerHTML = `
             <div class="order-detail-section">
@@ -568,7 +646,23 @@ async function renderOrderDetail(orderId) {
                         <div class="order-info-label">Total</div>
                         <div class="order-info-value">$${parseFloat(order.total).toLocaleString('es-CO')}</div>
                     </div>
+                    ${order.paid_at ? `
+                        <div class="order-info-item">
+                            <div class="order-info-label">Fecha de Pago</div>
+                            <div class="order-info-value">${paidDate}</div>
+                        </div>
+                        <div class="order-info-item">
+                            <div class="order-info-label">Confirmado por</div>
+                            <div class="order-info-value">${order.confirmed_by_username || 'Sistema'}</div>
+                        </div>
+                    ` : ''}
                 </div>
+                ${order.payment_notes ? `
+                    <div class="order-info-item" style="margin-top: 1rem;">
+                        <div class="order-info-label">Notas de Pago</div>
+                        <div class="order-info-value">${order.payment_notes}</div>
+                    </div>
+                ` : ''}
             </div>
 
             <div class="order-detail-section">
@@ -631,33 +725,45 @@ async function renderOrderDetail(orderId) {
                 </div>
             </div>
 
-            <div class="order-detail-section">
-                <h3>Actualizar Estado del Pedido</h3>
-                <div class="order-status-update">
-                    <div class="status-selector">
-                        <button class="btn btn-secondary ${order.status === 'pending' ? 'active' : ''}" 
-                                onclick="updateStatus(${order.id}, 'pending')">
-                            Pendiente
+            ${order.status !== 'pending_payment' && order.status !== 'cancelled' ? `
+                <div class="order-detail-section">
+                    <h3>Actualizar Estado del Pedido</h3>
+                    <div class="order-status-update">
+                        <div class="status-selector">
+                            <button class="btn btn-secondary ${order.status === 'pending' ? 'active' : ''}" 
+                                    onclick="updateStatus(${order.id}, 'pending')">
+                                Pendiente
+                            </button>
+                            <button class="btn btn-primary ${order.status === 'processing' ? 'active' : ''}" 
+                                    onclick="updateStatus(${order.id}, 'processing')">
+                                Procesando
+                            </button>
+                            <button class="btn btn-primary ${order.status === 'shipped' ? 'active' : ''}" 
+                                    onclick="updateStatus(${order.id}, 'shipped')">
+                                Enviado
+                            </button>
+                            <button class="btn btn-secondary ${order.status === 'delivered' ? 'active' : ''}" 
+                                    onclick="updateStatus(${order.id}, 'delivered')">
+                                Entregado
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            ` : ''}
+
+            ${order.status === 'pending_payment' ? `
+                <div class="order-detail-section">
+                    <h3>⚠️ Esta orden está esperando confirmación de pago</h3>
+                    <div style="display: flex; gap: 1rem; margin-top: 1rem;">
+                        <button class="btn btn-primary" style="flex: 1;" onclick="confirmPaymentModal(${order.id})">
+                            ✅ Confirmar Pago Recibido
                         </button>
-                        <button class="btn btn-primary ${order.status === 'processing' ? 'active' : ''}" 
-                                onclick="updateStatus(${order.id}, 'processing')">
-                            Procesando
-                        </button>
-                        <button class="btn btn-primary ${order.status === 'shipped' ? 'active' : ''}" 
-                                onclick="updateStatus(${order.id}, 'shipped')">
-                            Enviado
-                        </button>
-                        <button class="btn btn-secondary ${order.status === 'delivered' ? 'active' : ''}" 
-                                onclick="updateStatus(${order.id}, 'delivered')">
-                            Entregado
-                        </button>
-                        <button class="btn btn-danger ${order.status === 'cancelled' ? 'active' : ''}" 
-                                onclick="updateStatus(${order.id}, 'cancelled')">
-                            Cancelado
+                        <button class="btn btn-danger" style="flex: 1;" onclick="cancelOrderModal(${order.id})">
+                            ❌ Cancelar Orden
                         </button>
                     </div>
                 </div>
-            </div>
+            ` : ''}
         `;
     } catch (error) {
         content.innerHTML = `
@@ -733,6 +839,124 @@ async function loadOrders() {
     }
 }
 
+// ============= FUNCIONES DE PAGO =============
+
+function confirmPaymentModal(orderId) {
+    const modal = document.createElement('div');
+    modal.className = 'modal active';
+    modal.id = 'confirmPaymentModal';
+    
+    modal.innerHTML = `
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h2>✅ Confirmar Pago</h2>
+                <button class="close-btn" onclick="closeConfirmPaymentModal()">&times;</button>
+            </div>
+            
+            <div style="padding: 1rem 0;">
+                <div style="background: #f39c12; padding: 1rem; border-radius: 10px; margin-bottom: 1.5rem; color: #000;">
+                    <strong>⚠️ Importante:</strong><br>
+                    Al confirmar, se descontará el stock de los productos automáticamente.
+                </div>
+                
+                <div class="form-group">
+                    <label>Notas del Pago (opcional)</label>
+                    <textarea id="paymentNotes" rows="3" placeholder="Ej: Pago recibido por Nequi, comprobante #12345"></textarea>
+                </div>
+                
+                <button class="btn btn-primary" onclick="confirmPaymentAction(${orderId})" style="width: 100%;">
+                    ✅ Confirmar Pago y Actualizar Stock
+                </button>
+                
+                <button class="btn btn-secondary" onclick="closeConfirmPaymentModal()" style="width: 100%; margin-top: 1rem;">
+                    Cancelar
+                </button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+}
+
+function closeConfirmPaymentModal() {
+    const modal = document.getElementById('confirmPaymentModal');
+    if (modal) {
+        modal.remove();
+    }
+}
+
+async function confirmPaymentAction(orderId) {
+    const notes = document.getElementById('paymentNotes').value;
+    
+    try {
+        await confirmPayment(orderId, notes);
+        alert('✅ Pago confirmado exitosamente. Stock actualizado.');
+        closeConfirmPaymentModal();
+        closeModal('orderDetailModal');
+        loadOrders();
+    } catch (error) {
+        alert('Error: ' + error.message);
+    }
+}
+
+function cancelOrderModal(orderId) {
+    const modal = document.createElement('div');
+    modal.className = 'modal active';
+    modal.id = 'cancelOrderModal';
+    
+    modal.innerHTML = `
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h2>❌ Cancelar Orden</h2>
+                <button class="close-btn" onclick="closeCancelOrderModal()">&times;</button>
+            </div>
+            
+            <div style="padding: 1rem 0;">
+                <div class="form-group">
+                    <label>Motivo de Cancelación</label>
+                    <textarea id="cancelReason" rows="3" placeholder="Ej: Cliente no realizó el pago" required></textarea>
+                </div>
+                
+                <button class="btn btn-danger" onclick="cancelOrderAction(${orderId})" style="width: 100%;">
+                    ❌ Cancelar Orden
+                </button>
+                
+                <button class="btn btn-secondary" onclick="closeCancelOrderModal()" style="width: 100%; margin-top: 1rem;">
+                    Volver
+                </button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+}
+
+function closeCancelOrderModal() {
+    const modal = document.getElementById('cancelOrderModal');
+    if (modal) {
+        modal.remove();
+    }
+}
+
+async function cancelOrderAction(orderId) {
+    const reason = document.getElementById('cancelReason').value;
+    
+    if (!reason.trim()) {
+        alert('Por favor ingresa un motivo de cancelación');
+        return;
+    }
+    
+    try {
+        await cancelOrder(orderId, reason);
+        alert('Orden cancelada exitosamente');
+        closeCancelOrderModal();
+        closeModal('orderDetailModal');
+        loadOrders();
+    } catch (error) {
+        alert('Error al cancelar orden: ' + error.message);
+    }
+}
+
 // ============= FUNCIONES DE MODALES =============
 
 function openModal(modalId) {
@@ -792,8 +1016,8 @@ function clearCartConfirm() {
 
 function proceedToCheckout() {
     closeModal('cartModal');
-    document.getElementById('checkoutTotal').textContent = 
-        '$' + (getCartTotal() + (getCartTotal() > 150000 ? 0 : 15000)).toLocaleString('es-CO');
+    const total = getCartTotal() + (getCartTotal() > 150000 ? 0 : 15000);
+document.getElementById('checkoutTotal').textContent = '$' + total.toLocaleString('es-CO');
     openModal('checkoutModal');
 }
 
@@ -805,6 +1029,95 @@ function logout() {
     document.getElementById('ordersContent').style.display = 'none';
     renderHeader();
     renderCatalog();
+}
+
+// ============= FUNCIÓN DE PAGO POR WHATSAPP =============
+
+function showPaymentInstructions(whatsappURL, total) {
+    closeModal('checkoutModal');
+    
+    const modal = document.createElement('div');
+    modal.className = 'modal active';
+    modal.id = 'paymentInstructionsModal';
+    
+    modal.innerHTML = `
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header">
+                <h2>💳 Instrucciones de Pago</h2>
+                <button class="close-btn" onclick="closePaymentInstructions()">&times;</button>
+            </div>
+            
+            <div style="padding: 1rem 0;">
+                <div style="background: #1a1a1a; padding: 1.5rem; border-radius: 10px; margin-bottom: 1.5rem; border: 2px solid #2ecc71;">
+                    <h3 style="color: #2ecc71; margin-bottom: 1rem;">Total a Pagar</h3>
+                    <div style="font-size: 2rem; font-weight: bold; color: #fff;">
+                        ${total.toLocaleString('es-CO')}
+                    </div>
+                </div>
+                
+                <div style="background: #1a1a1a; padding: 1.5rem; border-radius: 10px; margin-bottom: 1.5rem;">
+                    <h3 style="color: #fff; margin-bottom: 1rem;">📱 Opciones de Pago</h3>
+                    
+                    <div style="margin-bottom: 1rem; padding: 1rem; background: #0a0a0a; border-radius: 8px;">
+                        <div style="color: #2ecc71; font-weight: bold; margin-bottom: 0.5rem;">
+                            💚 Nequi
+                        </div>
+                        <div style="color: #a0a0a0; font-size: 0.9rem;">
+                            Número: <span style="color: #fff; font-weight: bold;">${PAYMENT_CONFIG.nequiNumber}</span><br>
+                            Nombre: ${PAYMENT_CONFIG.nequiName}
+                        </div>
+                    </div>
+                    
+                    <div style="margin-bottom: 1rem; padding: 1rem; background: #0a0a0a; border-radius: 8px;">
+                        <div style="color: #e74c3c; font-weight: bold; margin-bottom: 0.5rem;">
+                            🏦 Bancolombia
+                        </div>
+                        <div style="color: #a0a0a0; font-size: 0.9rem;">
+                            Cuenta: <span style="color: #fff; font-weight: bold;">${PAYMENT_CONFIG.bancolombiaAccount}</span><br>
+                            Tipo: Ahorros<br>
+                            Nombre: ${PAYMENT_CONFIG.bancolombiaName}
+                        </div>
+                    </div>
+                    
+                    <div style="padding: 1rem; background: #0a0a0a; border-radius: 8px;">
+                        <div style="color: #3498db; font-weight: bold; margin-bottom: 0.5rem;">
+                            💳 Daviplata
+                        </div>
+                        <div style="color: #a0a0a0; font-size: 0.9rem;">
+                            Número: <span style="color: #fff; font-weight: bold;">${PAYMENT_CONFIG.daviplataNumber}</span><br>
+                            Nombre: ${PAYMENT_CONFIG.daviplataName}
+                        </div>
+                    </div>
+                </div>
+                
+                <div style="background: #f39c12; padding: 1rem; border-radius: 10px; margin-bottom: 1.5rem; color: #000;">
+                    <strong>⚠️ Importante:</strong><br>
+                    • Realiza el pago y envía el comprobante por WhatsApp<br>
+                    • Incluye tu nombre completo en el mensaje<br>
+                    • Tu pedido será procesado al confirmar el pago<br>
+                    • El stock se reserva por 24 horas
+                </div>
+                
+                <button class="btn btn-primary" onclick="window.open('${whatsappURL}', '_blank')" style="width: 100%; padding: 1rem; font-size: 1.1rem;">
+                    📱 Enviar Pedido por WhatsApp
+                </button>
+                
+                <button class="btn btn-secondary" onclick="closePaymentInstructions()" style="width: 100%; margin-top: 1rem;">
+                    Cerrar
+                </button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+}
+
+function closePaymentInstructions() {
+    const modal = document.getElementById('paymentInstructionsModal');
+    if (modal) {
+        modal.remove();
+    }
+    closeModal('checkoutModal');
 }
 
 // ============= CARGA DE DATOS =============
@@ -875,32 +1188,73 @@ document.getElementById('productForm').addEventListener('submit', async (e) => {
 document.getElementById('checkoutForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     
-    const orderData = {
-        customer: {
-            name: document.getElementById('customerName').value,
-            email: document.getElementById('customerEmail').value,
-            phone: document.getElementById('customerPhone').value,
-            address: document.getElementById('customerAddress').value,
-            city: document.getElementById('customerCity').value
-        },
-        items: cart,
-        subtotal: getCartTotal(),
-        shipping: getCartTotal() > 150000 ? 0 : 15000,
-        total: getCartTotal() + (getCartTotal() > 150000 ? 0 : 15000),
-        date: new Date().toISOString()
-    };
+    const customerName = document.getElementById('customerName').value;
+    const customerEmail = document.getElementById('customerEmail').value;
+    const customerPhone = document.getElementById('customerPhone').value;
+    const customerAddress = document.getElementById('customerAddress').value;
+    const customerCity = document.getElementById('customerCity').value;
     
+    const subtotal = getCartTotal();
+    const shipping = subtotal > 150000 ? 0 : 15000;
+    const total = subtotal + shipping;
+    
+    // Generar mensaje detallado para WhatsApp
+    let mensaje = `🛍️ *NUEVO PEDIDO*%0A%0A`;
+    mensaje += `👤 *Cliente:* ${customerName}%0A`;
+    mensaje += `📧 *Email:* ${customerEmail}%0A`;
+    mensaje += `📱 *Teléfono:* ${customerPhone}%0A`;
+    mensaje += `📍 *Ciudad:* ${customerCity}%0A`;
+    mensaje += `🏠 *Dirección:* ${customerAddress}%0A%0A`;
+    
+    mensaje += `🛒 *PRODUCTOS:*%0A`;
+    mensaje += `━━━━━━━━━━━━━━━%0A`;
+    
+    cart.forEach(item => {
+        mensaje += `• *${item.name}*%0A`;
+        mensaje += `  Cantidad: ${item.quantity}%0A`;
+        mensaje += `  Precio: ${item.price.toLocaleString('es-CO')}%0A`;
+        mensaje += `  Subtotal: ${(item.price * item.quantity).toLocaleString('es-CO')}%0A%0A`;
+    });
+    
+    mensaje += `━━━━━━━━━━━━━━━%0A`;
+    mensaje += `💰 *Subtotal:* ${subtotal.toLocaleString('es-CO')}%0A`;
+mensaje += `🚚 *Envío:* ${shipping === 0 ? 'Gratis' : '$' + shipping.toLocaleString('es-CO')}%0A`;
+    mensaje += `✨ *TOTAL A PAGAR:* ${total.toLocaleString('es-CO')}%0A%0A`;
+    mensaje += `Estoy listo para realizar el pago 😊`;
+    
+    // Guardar pedido pendiente en base de datos
     try {
+        const orderData = {
+            customer: {
+                name: customerName,
+                email: customerEmail,
+                phone: customerPhone,
+                address: customerAddress,
+                city: customerCity
+            },
+            items: cart,
+            subtotal: subtotal,
+            shipping: shipping,
+            total: total
+        };
+        
         const result = await createOrder(orderData);
+        
         if (result.success) {
-            alert(`¡Pedido realizado con éxito! 🎉\n\nNúmero de orden: ${result.orderNumber}\n\nRecibirás un email de confirmación pronto.`);
+            // Construir URL de WhatsApp
+            const whatsappURL = `https://wa.me/${PAYMENT_CONFIG.whatsappNumber}?text=${mensaje}`;
+            
+            // Mostrar instrucciones de pago
+            showPaymentInstructions(whatsappURL, total);
+            
+            // Limpiar carrito y formulario
             clearCart();
-            closeModal('checkoutModal');
             document.getElementById('checkoutForm').reset();
-            loadProducts();
         }
+        
     } catch (error) {
         alert('Error al procesar el pedido. Por favor intenta nuevamente.');
+        console.error(error);
     }
 });
 

@@ -272,6 +272,17 @@ body {
     color: #fff;
 }
 
+.status-pending_payment {
+    background: #f39c12;
+    color: #000;
+}
+
+/* Highlight para órdenes pendientes de pago */
+.pending-payment-row {
+    background: rgba(243, 156, 18, 0.1);
+    border-left: 3px solid #f39c12;
+}
+
 .order-actions {
     display: flex;
     gap: 0.5rem;

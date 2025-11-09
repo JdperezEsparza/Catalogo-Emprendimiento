@@ -1,3 +1,4 @@
+//server.js
 const express = require('express');
 const mysql = require('mysql2/promise');
 const bcrypt = require('bcrypt');
@@ -11,7 +12,7 @@ const PORT = process.env.PORT || 3000;
 // Middlewares
 app.use(cors());
 app.use(express.json());
-app.use(express.static('public')); // Para servir los archivos HTML, CSS, JS
+app.use(express.static('public'));
 
 // Configuración de la base de datos
 const dbConfig = {
@@ -25,7 +26,6 @@ const dbConfig = {
     queueLimit: 0
 };
 
-// Pool de conexiones
 const pool = mysql.createPool(dbConfig);
 
 // Middleware para verificar token admin
@@ -46,7 +46,6 @@ const verifyAdmin = async (req, res, next) => {
 
 // ============= RUTAS DE AUTENTICACIÓN =============
 
-// Login de administrador
 app.post('/api/auth/login', async (req, res) => {
     try {
         const { username, password } = req.body;
@@ -90,7 +89,6 @@ app.post('/api/auth/login', async (req, res) => {
 
 // ============= RUTAS DE PRODUCTOS =============
 
-// Obtener todos los productos
 app.get('/api/products', async (req, res) => {
     try {
         const [products] = await pool.query(
@@ -103,7 +101,6 @@ app.get('/api/products', async (req, res) => {
     }
 });
 
-// Obtener un producto por ID
 app.get('/api/products/:id', async (req, res) => {
     try {
         const [products] = await pool.query(
@@ -122,7 +119,6 @@ app.get('/api/products/:id', async (req, res) => {
     }
 });
 
-// Crear producto (solo admin)
 app.post('/api/products', verifyAdmin, async (req, res) => {
     try {
         const { name, description, price, stock, image } = req.body;
@@ -143,7 +139,6 @@ app.post('/api/products', verifyAdmin, async (req, res) => {
     }
 });
 
-// Actualizar producto (solo admin)
 app.put('/api/products/:id', verifyAdmin, async (req, res) => {
     try {
         const { name, description, price, stock, image } = req.body;
@@ -167,7 +162,6 @@ app.put('/api/products/:id', verifyAdmin, async (req, res) => {
     }
 });
 
-// Eliminar producto (solo admin)
 app.delete('/api/products/:id', verifyAdmin, async (req, res) => {
     try {
         const [result] = await pool.query(
@@ -191,7 +185,7 @@ app.delete('/api/products/:id', verifyAdmin, async (req, res) => {
 
 // ============= RUTAS DE ÓRDENES =============
 
-// Crear orden
+// Crear orden pendiente de pago (NO descuenta stock)
 app.post('/api/orders', async (req, res) => {
     const connection = await pool.getConnection();
     
@@ -201,22 +195,10 @@ app.post('/api/orders', async (req, res) => {
         const { customer, items, subtotal, shipping, total } = req.body;
         const orderNumber = 'ORD-' + Date.now();
 
-        // Crear la orden
-        const [orderResult] = await connection.query(
-            `INSERT INTO orders (order_number, customer_name, customer_email, customer_phone, 
-             customer_address, customer_city, subtotal, shipping, total) 
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [orderNumber, customer.name, customer.email, customer.phone, 
-             customer.address, customer.city, subtotal, shipping, total]
-        );
-
-        const orderId = orderResult.insertId;
-
-        // Insertar items y actualizar stock
+        // Verificar que hay stock disponible (sin descontar aún)
         for (const item of items) {
-            // Verificar stock disponible
             const [products] = await connection.query(
-                'SELECT stock FROM products WHERE id = ? FOR UPDATE',
+                'SELECT stock FROM products WHERE id = ?',
                 [item.id]
             );
 
@@ -226,20 +208,27 @@ app.post('/api/orders', async (req, res) => {
                     error: `Stock insuficiente para ${item.name}` 
                 });
             }
+        }
 
-            // Insertar item de orden
+        // Crear la orden con estado pending_payment
+        const [orderResult] = await connection.query(
+            `INSERT INTO orders (order_number, customer_name, customer_email, customer_phone, 
+             customer_address, customer_city, subtotal, shipping, total, status, payment_method) 
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending_payment', 'whatsapp')`,
+            [orderNumber, customer.name, customer.email, customer.phone, 
+             customer.address, customer.city, subtotal, shipping, total]
+        );
+
+        const orderId = orderResult.insertId;
+
+        // Insertar items (SIN descontar stock todavía)
+        for (const item of items) {
             await connection.query(
                 `INSERT INTO order_items (order_id, product_id, product_name, 
                  product_price, quantity, subtotal) 
                  VALUES (?, ?, ?, ?, ?, ?)`,
                 [orderId, item.id, item.name, item.price, item.quantity, 
                  item.price * item.quantity]
-            );
-
-            // Actualizar stock
-            await connection.query(
-                'UPDATE products SET stock = stock - ? WHERE id = ?',
-                [item.quantity, item.id]
             );
         }
 
@@ -249,7 +238,7 @@ app.post('/api/orders', async (req, res) => {
             success: true,
             orderId: orderId,
             orderNumber: orderNumber,
-            message: 'Orden creada exitosamente'
+            message: 'Orden creada, esperando confirmación de pago'
         });
 
     } catch (error) {
@@ -261,14 +250,160 @@ app.post('/api/orders', async (req, res) => {
     }
 });
 
-// Obtener todas las órdenes (solo admin)
+// Confirmar pago manualmente (ADMIN) - Aquí se descuenta el stock
+app.post('/api/orders/:id/confirm-payment', verifyAdmin, async (req, res) => {
+    const connection = await pool.getConnection();
+    
+    try {
+        await connection.beginTransaction();
+
+        const { payment_notes } = req.body;
+
+        // Obtener la orden
+        const [orders] = await connection.query(
+            'SELECT * FROM orders WHERE id = ?',
+            [req.params.id]
+        );
+
+        if (orders.length === 0) {
+            await connection.rollback();
+            return res.status(404).json({ error: 'Orden no encontrada' });
+        }
+
+        const order = orders[0];
+
+        if (order.status !== 'pending_payment') {
+            await connection.rollback();
+            return res.status(400).json({ error: 'Esta orden ya fue procesada' });
+        }
+
+        // Obtener items de la orden
+        const [items] = await connection.query(
+            'SELECT * FROM order_items WHERE order_id = ?',
+            [order.id]
+        );
+
+        // Descontar stock de productos
+        for (const item of items) {
+            const [result] = await connection.query(
+                'UPDATE products SET stock = stock - ? WHERE id = ? AND stock >= ?',
+                [item.quantity, item.product_id, item.quantity]
+            );
+
+            if (result.affectedRows === 0) {
+                await connection.rollback();
+                return res.status(400).json({ 
+                    error: `Stock insuficiente para ${item.product_name}. Por favor cancela la orden.` 
+                });
+            }
+        }
+
+        // Actualizar orden a pagada y pendiente de procesamiento
+        await connection.query(
+            `UPDATE orders 
+             SET status = 'pending', 
+                 paid_at = NOW(),
+                 confirmed_by = ?,
+                 payment_notes = ?
+             WHERE id = ?`,
+            [req.adminId, payment_notes || 'Pago confirmado por admin', order.id]
+        );
+
+        await connection.commit();
+
+        res.json({
+            success: true,
+            message: 'Pago confirmado y stock actualizado exitosamente'
+        });
+
+    } catch (error) {
+        await connection.rollback();
+        console.error('Error al confirmar pago:', error);
+        res.status(500).json({ error: 'Error al confirmar pago' });
+    } finally {
+        connection.release();
+    }
+});
+
+// Cancelar orden (devuelve stock si ya fue descontado)
+app.post('/api/orders/:id/cancel', verifyAdmin, async (req, res) => {
+    const connection = await pool.getConnection();
+    
+    try {
+        await connection.beginTransaction();
+
+        const { reason } = req.body;
+
+        // Obtener la orden
+        const [orders] = await connection.query(
+            'SELECT * FROM orders WHERE id = ?',
+            [req.params.id]
+        );
+
+        if (orders.length === 0) {
+            await connection.rollback();
+            return res.status(404).json({ error: 'Orden no encontrada' });
+        }
+
+        const order = orders[0];
+
+        // Si la orden ya fue pagada, devolver el stock
+        if (order.status !== 'pending_payment' && order.status !== 'cancelled') {
+            const [items] = await connection.query(
+                'SELECT * FROM order_items WHERE order_id = ?',
+                [order.id]
+            );
+
+            for (const item of items) {
+                await connection.query(
+                    'UPDATE products SET stock = stock + ? WHERE id = ?',
+                    [item.quantity, item.product_id]
+                );
+            }
+        }
+
+        // Marcar orden como cancelada
+        await connection.query(
+            `UPDATE orders 
+             SET status = 'cancelled',
+                 payment_notes = ?
+             WHERE id = ?`,
+            [reason || 'Cancelada por administrador', order.id]
+        );
+
+        await connection.commit();
+
+        res.json({
+            success: true,
+            message: 'Orden cancelada exitosamente'
+        });
+
+    } catch (error) {
+        await connection.rollback();
+        console.error('Error al cancelar orden:', error);
+        res.status(500).json({ error: 'Error al cancelar orden' });
+    } finally {
+        connection.release();
+    }
+});
+
+// Obtener todas las órdenes (admin)
 app.get('/api/orders', verifyAdmin, async (req, res) => {
     try {
         const [orders] = await pool.query(
             `SELECT o.*, 
-             (SELECT COUNT(*) FROM order_items WHERE order_id = o.id) as items_count
+             (SELECT COUNT(*) FROM order_items WHERE order_id = o.id) as items_count,
+             a.username as confirmed_by_username
              FROM orders o 
-             ORDER BY created_at DESC`
+             LEFT JOIN admins a ON o.confirmed_by = a.id
+             ORDER BY 
+                CASE 
+                    WHEN o.status = 'pending_payment' THEN 1
+                    WHEN o.status = 'pending' THEN 2
+                    WHEN o.status = 'processing' THEN 3
+                    ELSE 4
+                END,
+                o.created_at DESC`
         );
         res.json(orders);
     } catch (error) {
@@ -277,11 +412,14 @@ app.get('/api/orders', verifyAdmin, async (req, res) => {
     }
 });
 
-// Obtener detalle de una orden (solo admin)
+// Obtener detalle de una orden (admin)
 app.get('/api/orders/:id', verifyAdmin, async (req, res) => {
     try {
         const [orders] = await pool.query(
-            'SELECT * FROM orders WHERE id = ?',
+            `SELECT o.*, a.username as confirmed_by_username
+             FROM orders o
+             LEFT JOIN admins a ON o.confirmed_by = a.id
+             WHERE o.id = ?`,
             [req.params.id]
         );
 
@@ -304,11 +442,11 @@ app.get('/api/orders/:id', verifyAdmin, async (req, res) => {
     }
 });
 
-// Actualizar estado de orden (solo admin)
+// Actualizar estado de orden (admin)
 app.patch('/api/orders/:id/status', verifyAdmin, async (req, res) => {
     try {
         const { status } = req.body;
-        const validStatuses = ['pending', 'processing', 'shipped', 'delivered', 'cancelled'];
+        const validStatuses = ['pending_payment', 'pending', 'processing', 'shipped', 'delivered', 'cancelled'];
 
         if (!validStatuses.includes(status)) {
             return res.status(400).json({ error: 'Estado inválido' });
@@ -342,4 +480,5 @@ app.get('/api/health', (req, res) => {
 app.listen(PORT, () => {
     console.log(`🚀 Servidor corriendo en puerto ${PORT}`);
     console.log(`📡 API disponible en http://localhost:${PORT}/api`);
+    console.log(`💰 Sistema de pago manual por WhatsApp activado`);
 });
