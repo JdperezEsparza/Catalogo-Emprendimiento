@@ -19,6 +19,7 @@ let currentOrders = [];
 let cart = [];
 let currentSection = 'products';
 let orderFilter = 'all';
+let currentAnalyticsFilter = 'month';
 
 // ============= FUNCIONES DE API =============
 
@@ -43,7 +44,7 @@ async function saveProduct(product) {
             },
             body: JSON.stringify(product)
         });
-        
+
         if (!response.ok) throw new Error('Error al guardar producto');
         const data = await response.json();
         alert('Producto guardado exitosamente');
@@ -65,7 +66,7 @@ async function updateProduct(id, product) {
             },
             body: JSON.stringify(product)
         });
-        
+
         if (!response.ok) throw new Error('Error al actualizar producto');
         const data = await response.json();
         alert('Producto actualizado exitosamente');
@@ -85,7 +86,7 @@ async function deleteProduct(id) {
                 'Authorization': `Bearer ${adminToken}`
             }
         });
-        
+
         if (!response.ok) throw new Error('Error al eliminar producto');
         const data = await response.json();
         alert('Producto eliminado exitosamente');
@@ -106,7 +107,7 @@ async function createOrder(orderData) {
             },
             body: JSON.stringify(orderData)
         });
-        
+
         if (!response.ok) throw new Error('Error al crear orden');
         return await response.json();
     } catch (error) {
@@ -125,7 +126,7 @@ async function confirmPayment(orderId, notes) {
             },
             body: JSON.stringify({ payment_notes: notes })
         });
-        
+
         if (!response.ok) {
             const error = await response.json();
             throw new Error(error.error);
@@ -147,7 +148,7 @@ async function cancelOrder(orderId, reason) {
             },
             body: JSON.stringify({ reason })
         });
-        
+
         if (!response.ok) throw new Error('Error al cancelar orden');
         return await response.json();
     } catch (error) {
@@ -165,7 +166,7 @@ async function loginAdmin(username, password) {
             },
             body: JSON.stringify({ username, password })
         });
-        
+
         if (!response.ok) throw new Error('Credenciales incorrectas');
         return await response.json();
     } catch (error) {
@@ -214,7 +215,7 @@ async function updateOrderStatus(orderId, status) {
             },
             body: JSON.stringify({ status })
         });
-        
+
         if (!response.ok) throw new Error('Error al actualizar estado');
         return await response.json();
     } catch (error) {
@@ -230,7 +231,7 @@ function addToCart(productId) {
     if (!product) return;
 
     const existingItem = cart.find(item => item.id === productId);
-    
+
     if (existingItem) {
         if (existingItem.quantity < product.stock) {
             existingItem.quantity++;
@@ -246,7 +247,7 @@ function addToCart(productId) {
             return;
         }
     }
-    
+
     updateCartCount();
     alert('Producto añadido al carrito');
 }
@@ -294,7 +295,7 @@ function clearCart() {
 function renderHeader() {
     const actions = document.getElementById('headerActions');
     const adminNav = document.getElementById('adminNav');
-    
+
     if (isAdmin) {
         actions.innerHTML = `
             <button class="btn btn-cart" onclick="openModal('cartModal')">
@@ -318,7 +319,7 @@ function renderHeader() {
 
 function renderCatalog() {
     const content = document.getElementById('catalogContent');
-    
+
     if (currentProducts.length === 0) {
         content.innerHTML = `
             <div class="empty-state">
@@ -332,18 +333,18 @@ function renderCatalog() {
     content.innerHTML = `
         <div class="catalog-grid">
             ${currentProducts.map(product => {
-                let stockClass = '';
-                let stockText = `Stock: ${product.stock} unidades`;
-                
-                if (product.stock === 0) {
-                    stockClass = 'out';
-                    stockText = 'Sin stock';
-                } else if (product.stock <= 5) {
-                    stockClass = 'low';
-                    stockText = `¡Últimas ${product.stock} unidades!`;
-                }
+        let stockClass = '';
+        let stockText = `Stock: ${product.stock} unidades`;
 
-                return `
+        if (product.stock === 0) {
+            stockClass = 'out';
+            stockText = 'Sin stock';
+        } else if (product.stock <= 5) {
+            stockClass = 'low';
+            stockText = `¡Últimas ${product.stock} unidades!`;
+        }
+
+        return `
                     <div class="product-card">
                         <img src="${product.image}" alt="${product.name}" class="product-image" onerror="this.src='https://via.placeholder.com/400x400?text=Sin+Imagen'">
                         <div class="product-info">
@@ -369,14 +370,14 @@ function renderCatalog() {
                         </div>
                     </div>
                 `;
-            }).join('')}
+    }).join('')}
         </div>
     `;
 }
 
 function renderCart() {
     const content = document.getElementById('cartContent');
-    
+
     if (cart.length === 0) {
         content.innerHTML = `
             <div class="cart-empty">
@@ -444,7 +445,7 @@ function renderCart() {
 
 function renderOrders() {
     const content = document.getElementById('ordersContent');
-    
+
     if (currentOrders.length === 0) {
         content.innerHTML = `
             <div class="empty-state">
@@ -455,8 +456,8 @@ function renderOrders() {
         return;
     }
 
-    const filteredOrders = orderFilter === 'all' 
-        ? currentOrders 
+    const filteredOrders = orderFilter === 'all'
+        ? currentOrders
         : currentOrders.filter(o => o.status === orderFilter);
 
     const stats = {
@@ -531,16 +532,16 @@ function renderOrders() {
                 <div class="order-cell">Acciones</div>
             </div>
             ${filteredOrders.map(order => {
-                const date = new Date(order.created_at);
-                const formattedDate = date.toLocaleDateString('es-CO', { 
-                    year: 'numeric', 
-                    month: 'short', 
-                    day: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit'
-                });
+        const date = new Date(order.created_at);
+        const formattedDate = date.toLocaleDateString('es-CO', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
 
-                return `
+        return `
                     <div class="order-row ${order.status === 'pending_payment' ? 'pending-payment-row' : ''}">
                         <div class="order-cell" data-label="Nº Orden">
                             <span class="order-number">${order.order_number}</span>
@@ -580,7 +581,7 @@ function renderOrders() {
                         </div>
                     </div>
                 `;
-            }).join('')}
+    }).join('')}
         </div>
     `;
 }
@@ -591,7 +592,7 @@ async function renderOrderDetail(orderId) {
 
     try {
         const order = await fetchOrderDetail(orderId);
-        
+
         const statusNames = {
             pending_payment: 'Esperando Pago',
             pending: 'Pendiente',
@@ -602,9 +603,9 @@ async function renderOrderDetail(orderId) {
         };
 
         const date = new Date(order.created_at);
-        const formattedDate = date.toLocaleDateString('es-CO', { 
-            year: 'numeric', 
-            month: 'long', 
+        const formattedDate = date.toLocaleDateString('es-CO', {
+            year: 'numeric',
+            month: 'long',
             day: 'numeric',
             hour: '2-digit',
             minute: '2-digit'
@@ -613,9 +614,9 @@ async function renderOrderDetail(orderId) {
         let paidDate = '';
         if (order.paid_at) {
             const pDate = new Date(order.paid_at);
-            paidDate = pDate.toLocaleDateString('es-CO', { 
-                year: 'numeric', 
-                month: 'long', 
+            paidDate = pDate.toLocaleDateString('es-CO', {
+                year: 'numeric',
+                month: 'long',
                 day: 'numeric',
                 hour: '2-digit',
                 minute: '2-digit'
@@ -779,23 +780,30 @@ async function renderOrderDetail(orderId) {
 
 function showSection(section) {
     currentSection = section;
-    
+
     document.querySelectorAll('.nav-btn').forEach(btn => {
         btn.classList.remove('active');
     });
-    
+
     const catalogContent = document.getElementById('catalogContent');
     const ordersContent = document.getElementById('ordersContent');
-    
+    const analyticsContent = document.getElementById('analyticsContent');
+
+    catalogContent.style.display = 'none';
+    ordersContent.style.display = 'none';
+    analyticsContent.style.display = 'none';
+
     if (section === 'products') {
         catalogContent.style.display = 'block';
-        ordersContent.style.display = 'none';
         document.querySelectorAll('.nav-btn')[0].classList.add('active');
     } else if (section === 'orders') {
-        catalogContent.style.display = 'none';
         ordersContent.style.display = 'block';
         document.querySelectorAll('.nav-btn')[1].classList.add('active');
         loadOrders();
+    } else if (section === 'analytics') {
+        analyticsContent.style.display = 'block';
+        document.querySelectorAll('.nav-btn')[2].classList.add('active');
+        loadAnalytics();
     }
 }
 
@@ -825,7 +833,7 @@ async function updateStatus(orderId, newStatus) {
 async function loadOrders() {
     const content = document.getElementById('ordersContent');
     content.innerHTML = '<div class="loading">Cargando pedidos...</div>';
-    
+
     try {
         currentOrders = await fetchOrders();
         renderOrders();
@@ -845,7 +853,7 @@ function confirmPaymentModal(orderId) {
     const modal = document.createElement('div');
     modal.className = 'modal active';
     modal.id = 'confirmPaymentModal';
-    
+
     modal.innerHTML = `
         <div class="modal-content" style="max-width: 500px;">
             <div class="modal-header">
@@ -874,7 +882,7 @@ function confirmPaymentModal(orderId) {
             </div>
         </div>
     `;
-    
+
     document.body.appendChild(modal);
 }
 
@@ -887,7 +895,7 @@ function closeConfirmPaymentModal() {
 
 async function confirmPaymentAction(orderId) {
     const notes = document.getElementById('paymentNotes').value;
-    
+
     try {
         await confirmPayment(orderId, notes);
         alert('✅ Pago confirmado exitosamente. Stock actualizado.');
@@ -903,7 +911,7 @@ function cancelOrderModal(orderId) {
     const modal = document.createElement('div');
     modal.className = 'modal active';
     modal.id = 'cancelOrderModal';
-    
+
     modal.innerHTML = `
         <div class="modal-content" style="max-width: 500px;">
             <div class="modal-header">
@@ -927,7 +935,7 @@ function cancelOrderModal(orderId) {
             </div>
         </div>
     `;
-    
+
     document.body.appendChild(modal);
 }
 
@@ -940,12 +948,12 @@ function closeCancelOrderModal() {
 
 async function cancelOrderAction(orderId) {
     const reason = document.getElementById('cancelReason').value;
-    
+
     if (!reason.trim()) {
         alert('Por favor ingresa un motivo de cancelación');
         return;
     }
-    
+
     try {
         await cancelOrder(orderId, reason);
         alert('Orden cancelada exitosamente');
@@ -974,7 +982,7 @@ function openProductModal(product = null) {
     const modal = document.getElementById('productModal');
     const title = document.getElementById('productModalTitle');
     const form = document.getElementById('productForm');
-    
+
     if (product) {
         title.textContent = 'Editar Prenda';
         document.getElementById('productId').value = product.id;
@@ -988,7 +996,7 @@ function openProductModal(product = null) {
         form.reset();
         document.getElementById('productId').value = '';
     }
-    
+
     openModal('productModal');
 }
 
@@ -1017,7 +1025,7 @@ function clearCartConfirm() {
 function proceedToCheckout() {
     closeModal('cartModal');
     const total = getCartTotal() + (getCartTotal() > 150000 ? 0 : 15000);
-document.getElementById('checkoutTotal').textContent = '$' + total.toLocaleString('es-CO');
+    document.getElementById('checkoutTotal').textContent = '$' + total.toLocaleString('es-CO');
     openModal('checkoutModal');
 }
 
@@ -1035,11 +1043,11 @@ function logout() {
 
 function showPaymentInstructions(whatsappURL, total) {
     closeModal('checkoutModal');
-    
+
     const modal = document.createElement('div');
     modal.className = 'modal active';
     modal.id = 'paymentInstructionsModal';
-    
+
     modal.innerHTML = `
         <div class="modal-content" style="max-width: 600px;">
             <div class="modal-header">
@@ -1108,7 +1116,7 @@ function showPaymentInstructions(whatsappURL, total) {
             </div>
         </div>
     `;
-    
+
     document.body.appendChild(modal);
 }
 
@@ -1125,7 +1133,7 @@ function closePaymentInstructions() {
 async function loadProducts() {
     const content = document.getElementById('catalogContent');
     content.innerHTML = '<div class="loading">Cargando productos...</div>';
-    
+
     try {
         currentProducts = await fetchProducts();
         renderCatalog();
@@ -1145,10 +1153,10 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     const username = document.getElementById('username').value;
     const password = document.getElementById('password').value;
-    
+
     try {
         const result = await loginAdmin(username, password);
-        
+
         if (result.success) {
             isAdmin = true;
             adminToken = result.token;
@@ -1164,7 +1172,7 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
 
 document.getElementById('productForm').addEventListener('submit', async (e) => {
     e.preventDefault();
-    
+
     const product = {
         name: document.getElementById('productName').value,
         description: document.getElementById('productDescription').value,
@@ -1172,32 +1180,32 @@ document.getElementById('productForm').addEventListener('submit', async (e) => {
         stock: parseInt(document.getElementById('productStock').value),
         image: document.getElementById('productImage').value
     };
-    
+
     const id = document.getElementById('productId').value;
-    
+
     if (id) {
         await updateProduct(id, product);
     } else {
         await saveProduct(product);
     }
-    
+
     closeModal('productModal');
     loadProducts();
 });
 
 document.getElementById('checkoutForm').addEventListener('submit', async (e) => {
     e.preventDefault();
-    
+
     const customerName = document.getElementById('customerName').value;
     const customerEmail = document.getElementById('customerEmail').value;
     const customerPhone = document.getElementById('customerPhone').value;
     const customerAddress = document.getElementById('customerAddress').value;
     const customerCity = document.getElementById('customerCity').value;
-    
+
     const subtotal = getCartTotal();
     const shipping = subtotal > 150000 ? 0 : 15000;
     const total = subtotal + shipping;
-    
+
     // Generar mensaje detallado para WhatsApp
     let mensaje = `🛍️ *NUEVO PEDIDO*%0A%0A`;
     mensaje += `👤 *Cliente:* ${customerName}%0A`;
@@ -1205,23 +1213,23 @@ document.getElementById('checkoutForm').addEventListener('submit', async (e) => 
     mensaje += `📱 *Teléfono:* ${customerPhone}%0A`;
     mensaje += `📍 *Ciudad:* ${customerCity}%0A`;
     mensaje += `🏠 *Dirección:* ${customerAddress}%0A%0A`;
-    
+
     mensaje += `🛒 *PRODUCTOS:*%0A`;
     mensaje += `━━━━━━━━━━━━━━━%0A`;
-    
+
     cart.forEach(item => {
         mensaje += `• *${item.name}*%0A`;
         mensaje += `  Cantidad: ${item.quantity}%0A`;
         mensaje += `  Precio: ${item.price.toLocaleString('es-CO')}%0A`;
         mensaje += `  Subtotal: ${(item.price * item.quantity).toLocaleString('es-CO')}%0A%0A`;
     });
-    
+
     mensaje += `━━━━━━━━━━━━━━━%0A`;
     mensaje += `💰 *Subtotal:* ${subtotal.toLocaleString('es-CO')}%0A`;
-mensaje += `🚚 *Envío:* ${shipping === 0 ? 'Gratis' : '$' + shipping.toLocaleString('es-CO')}%0A`;
+    mensaje += `🚚 *Envío:* ${shipping === 0 ? 'Gratis' : '$' + shipping.toLocaleString('es-CO')}%0A`;
     mensaje += `✨ *TOTAL A PAGAR:* ${total.toLocaleString('es-CO')}%0A%0A`;
     mensaje += `Estoy listo para realizar el pago 😊`;
-    
+
     // Guardar pedido pendiente en base de datos
     try {
         const orderData = {
@@ -1237,26 +1245,289 @@ mensaje += `🚚 *Envío:* ${shipping === 0 ? 'Gratis' : '$' + shipping.toLocale
             shipping: shipping,
             total: total
         };
-        
+
         const result = await createOrder(orderData);
-        
+
         if (result.success) {
             // Construir URL de WhatsApp
             const whatsappURL = `https://wa.me/${PAYMENT_CONFIG.whatsappNumber}?text=${mensaje}`;
-            
+
             // Mostrar instrucciones de pago
             showPaymentInstructions(whatsappURL, total);
-            
+
             // Limpiar carrito y formulario
             clearCart();
             document.getElementById('checkoutForm').reset();
         }
-        
+
     } catch (error) {
         alert('Error al procesar el pedido. Por favor intenta nuevamente.');
         console.error(error);
     }
 });
+
+// ============= ANALÍTICAS =============
+function formatCurrency(amount) {
+    const num = parseFloat(amount) || 0;
+    if (num >= 1000000) {
+        return '$' + (num / 1000000).toFixed(1) + 'M';
+    } else if (num >= 1000) {
+        return '$' + (num / 1000).toFixed(0) + 'K';
+    } else {
+        return '$' + Math.round(num).toLocaleString('es-CO');
+    }
+}
+
+
+let analyticsChart = null;
+
+async function loadAnalytics() {
+    const content = document.getElementById('analyticsContent');
+    content.innerHTML = '<div class="loading">Cargando analíticas...</div>';
+
+    try {
+        const dateRange = getDateRange();
+
+        const [topProducts, summary] = await Promise.all([
+            fetch(`${API_URL}/analytics/top-products?startDate=${dateRange.start}&endDate=${dateRange.end}`, {
+                headers: { 'Authorization': `Bearer ${adminToken}` }
+            }).then(res => res.json()),
+            fetch(`${API_URL}/analytics/sales-summary?startDate=${dateRange.start}&endDate=${dateRange.end}`, {
+                headers: { 'Authorization': `Bearer ${adminToken}` }
+            }).then(res => res.json())
+        ]);
+
+        renderAnalytics(topProducts, summary);
+    } catch (error) {
+        content.innerHTML = `
+            <div class="empty-state">
+                <h3>Error al cargar analíticas</h3>
+                <p>${error.message}</p>
+            </div>
+        `;
+    }
+}
+
+function getDateRange() {
+    const filter = currentAnalyticsFilter; // Usar la variable global
+    const end = new Date();
+    const start = new Date();
+
+    switch (filter) {
+        case 'today':
+            start.setHours(0, 0, 0, 0);
+            end.setHours(23, 59, 59, 999);
+            break;
+        case 'week':
+            start.setDate(start.getDate() - 7);
+            break;
+        case 'month':
+            start.setMonth(start.getMonth() - 1);
+            break;
+        case 'year':
+            start.setFullYear(start.getFullYear() - 1);
+            break;
+        case 'custom':
+            const customStart = document.getElementById('customStartDate')?.value;
+            const customEnd = document.getElementById('customEndDate')?.value;
+            if (customStart && customEnd) {
+                return {
+                    start: customStart,
+                    end: customEnd
+                };
+            }
+            break;
+    }
+
+    return {
+        start: start.toISOString().split('T')[0],
+        end: end.toISOString().split('T')[0]
+    };
+}
+function renderAnalytics(topProducts, summary) {
+    const content = document.getElementById('analyticsContent');
+
+    const filterLabels = {
+        today: 'Hoy',
+        week: 'Última semana',
+        month: 'Último mes',
+        year: 'Último año',
+        custom: 'Personalizado'
+    };
+
+    content.innerHTML = `
+    <div class="analytics-container">
+        <div class="analytics-header">
+            <h2>📊 Panel de Analíticas</h2>
+            <div class="analytics-filters">
+                <select id="analyticsFilter" onchange="changeAnalyticsFilter(this.value)">
+                    <option value="today" ${currentAnalyticsFilter === 'today' ? 'selected' : ''}>Hoy</option>
+                    <option value="week" ${currentAnalyticsFilter === 'week' ? 'selected' : ''}>Última semana</option>
+                    <option value="month" ${currentAnalyticsFilter === 'month' ? 'selected' : ''}>Último mes</option>
+                    <option value="year" ${currentAnalyticsFilter === 'year' ? 'selected' : ''}>Último año</option>
+                    <option value="custom" ${currentAnalyticsFilter === 'custom' ? 'selected' : ''}>Personalizado</option>
+                </select>
+                <div id="customDateRange" style="display: ${currentAnalyticsFilter === 'custom' ? 'flex' : 'none'}; gap: 0.5rem;">
+                    <input type="date" id="customStartDate" />
+                    <input type="date" id="customEndDate" />
+                    <button class="btn btn-primary" onclick="applyCustomDateRange()">Aplicar</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="analytics-summary">
+            <div class="stat-card-large">
+                <div class="stat-icon">💰</div>
+                <div class="stat-info">
+                    <div class="stat-label">Ingresos Totales</div>
+                    <div class="stat-value">${formatCurrency(summary.ingresos_totales)}</div>
+                </div>
+            </div>
+            <div class="stat-card-large">
+                <div class="stat-icon">📦</div>
+                <div class="stat-info">
+                    <div class="stat-label">Órdenes</div>
+                    <div class="stat-value">${summary.total_ordenes || 0}</div>
+                </div>
+            </div>
+            <div class="stat-card-large">
+                <div class="stat-icon">🎯</div>
+                <div class="stat-info">
+                    <div class="stat-label">Ticket Promedio</div>
+                    <div class="stat-value">${formatCurrency(summary.ticket_promedio)}</div>
+                    <div class="stat-sublabel">Promedio por orden</div>
+                </div>
+            </div>
+            <div class="stat-card-large">
+                <div class="stat-icon">✅</div>
+                <div class="stat-info">
+                    <div class="stat-label">Entregadas</div>
+                    <div class="stat-value">${summary.ordenes_completadas || 0}</div>
+                    <div class="stat-sublabel">Órdenes completadas</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="analytics-content-grid">
+            <div class="analytics-chart-container">
+                <h3>🥧 Productos Más Vendidos</h3>
+                <canvas id="topProductsChart"></canvas>
+            </div>
+
+            <div class="analytics-table-container">
+                <h3>🏆 Top 10 Productos</h3>
+                <div class="top-products-table">
+                    ${topProducts.length === 0 ? `
+                        <div class="empty-state">
+                            <p>No hay datos para este período</p>
+                        </div>
+                    ` : topProducts.map((product, index) => `
+                        <div class="top-product-row">
+                            <div class="top-product-rank">#${index + 1}</div>
+                            <img src="${product.image}" alt="${product.name}" class="top-product-image" onerror="this.src='https://via.placeholder.com/50x50?text=?'">
+                            <div class="top-product-info">
+                                <div class="top-product-name">${product.name}</div>
+                                <div class="top-product-stats">
+                                    ${product.total_vendido} vendidos · ${product.num_ordenes} órdenes
+                                </div>
+                            </div>
+                            <div class="top-product-revenue">
+                                ${formatCurrency(product.ingresos_totales)}
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        </div>
+    </div>
+    `;
+
+    // Renderizar gráfico de pastel
+    if (topProducts.length > 0) {
+        renderPieChart(topProducts);
+    }
+}
+function renderPieChart(products) {
+    const ctx = document.getElementById('topProductsChart');
+
+    if (analyticsChart) {
+        analyticsChart.destroy();
+    }
+
+    const colors = [
+        '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF',
+        '#FF9F40', '#FF6384', '#C9CBCF', '#4BC0C0', '#FF6384'
+    ];
+
+    analyticsChart = new Chart(ctx, {
+        type: 'pie',
+        data: {
+            labels: products.map(p => p.name),
+            datasets: [{
+                data: products.map(p => p.total_vendido),
+                backgroundColor: colors,
+                borderColor: '#1a1a1a',
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        color: '#ffffff',
+                        padding: 15,
+                        font: {
+                            size: 12
+                        }
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function (context) {
+                            const product = products[context.dataIndex];
+                            return `${product.name}: ${product.total_vendido} vendidos ($${parseFloat(product.ingresos_totales).toLocaleString('es-CO')})`;
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+function changeAnalyticsFilter(value) {
+    currentAnalyticsFilter = value;
+    
+    // Mostrar/ocultar el selector de fechas personalizadas
+    const customRange = document.getElementById('customDateRange');
+    if (customRange) {
+        customRange.style.display = value === 'custom' ? 'flex' : 'none';
+    }
+    
+    // Si no es personalizado, recargar automáticamente
+    if (value !== 'custom') {
+        loadAnalytics();
+    }
+}
+
+function applyCustomDateRange() {
+    const startDate = document.getElementById('customStartDate')?.value;
+    const endDate = document.getElementById('customEndDate')?.value;
+    
+    if (!startDate || !endDate) {
+        alert('Por favor selecciona ambas fechas');
+        return;
+    }
+    
+    if (new Date(startDate) > new Date(endDate)) {
+        alert('La fecha inicial no puede ser mayor que la fecha final');
+        return;
+    }
+    
+    loadAnalytics();
+}
 
 // ============= INICIALIZACIÓN =============
 renderHeader();

@@ -471,6 +471,77 @@ app.patch('/api/orders/:id/status', verifyAdmin, async (req, res) => {
     }
 });
 
+// ============= ANALÍTICAS (ADMIN) =============
+
+app.get('/api/analytics/top-products', verifyAdmin, async (req, res) => {
+    try {
+        const { startDate, endDate } = req.query;
+        
+        let query = `
+            SELECT 
+                p.id,
+                p.name,
+                p.image,
+                p.price,
+                SUM(oi.quantity) as total_vendido,
+                COUNT(DISTINCT oi.order_id) as num_ordenes,
+                SUM(oi.subtotal) as ingresos_totales
+            FROM order_items oi
+            INNER JOIN products p ON oi.product_id = p.id
+            INNER JOIN orders o ON oi.order_id = o.id
+            WHERE o.status IN ('pending', 'processing', 'shipped', 'delivered')
+        `;
+        
+        const params = [];
+        
+        if (startDate && endDate) {
+            query += ` AND o.created_at BETWEEN ? AND ?`;
+            params.push(startDate, endDate);
+        }
+        
+        query += `
+            GROUP BY p.id, p.name, p.image, p.price
+            ORDER BY total_vendido DESC
+            LIMIT 10
+        `;
+        
+        const [results] = await pool.query(query, params);
+        res.json(results);
+    } catch (error) {
+        console.error('Error al obtener analíticas:', error);
+        res.status(500).json({ error: 'Error al obtener analíticas' });
+    }
+});
+
+app.get('/api/analytics/sales-summary', verifyAdmin, async (req, res) => {
+    try {
+        const { startDate, endDate } = req.query;
+        
+        let query = `
+            SELECT 
+                COUNT(*) as total_ordenes,
+                SUM(total) as ingresos_totales,
+                AVG(total) as ticket_promedio,
+                SUM(CASE WHEN status = 'delivered' THEN 1 ELSE 0 END) as ordenes_completadas
+            FROM orders
+            WHERE status IN ('pending', 'processing', 'shipped', 'delivered')
+        `;
+        
+        const params = [];
+        
+        if (startDate && endDate) {
+            query += ` AND created_at BETWEEN ? AND ?`;
+            params.push(startDate, endDate);
+        }
+        
+        const [results] = await pool.query(query, params);
+        res.json(results[0]);
+    } catch (error) {
+        console.error('Error al obtener resumen de ventas:', error);
+        res.status(500).json({ error: 'Error al obtener resumen de ventas' });
+    }
+});
+
 // ============= RUTA DE SALUD =============
 app.get('/api/health', (req, res) => {
     res.json({ status: 'OK', timestamp: new Date().toISOString() });

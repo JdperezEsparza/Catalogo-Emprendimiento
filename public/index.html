@@ -20,13 +20,15 @@
 
     <!-- Navegación Admin -->
     <div id="adminNav" class="admin-nav" style="display: none;">
-        <button class="nav-btn active" onclick="showSection('products')">📦 Productos</button>
-        <button class="nav-btn" onclick="showSection('orders')">📋 Pedidos</button>
-    </div>
+    <button class="nav-btn active" onclick="showSection('products')">📦 Productos</button>
+    <button class="nav-btn" onclick="showSection('orders')">📋 Pedidos</button>
+    <button class="nav-btn" onclick="showSection('analytics')">📊 Analíticas</button>
+</div>
 
     <div class="container">
         <div id="catalogContent"></div>
         <div id="ordersContent" style="display: none;"></div>
+        <div id="analyticsContent" style="display: none;"></div>
     </div>
 
     <!-- Botón Flotante de WhatsApp -->
@@ -156,7 +158,7 @@
     </div>
 
     <script src="app.js"></script>
-
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="chatbot.js"></script>
 </body>
 </html>

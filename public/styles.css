@@ -834,5 +834,261 @@ body {
         width: 28px;
         height: 28px;
     }
+
     
+    
+}
+
+/* ============= ANALÍTICAS ============= */
+.analytics-container {
+    padding: 2rem;
+}
+
+.analytics-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+}
+
+.analytics-header h2 {
+    color: #ffffff;
+    font-size: 1.8rem;
+}
+
+.analytics-filters {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+}
+
+.analytics-filters select,
+.analytics-filters input[type="date"] {
+    padding: 0.5rem 1rem;
+    background: #1a1a1a;
+    border: 1px solid #2d2d2d;
+    border-radius: 8px;
+    color: #ffffff;
+    font-size: 0.9rem;
+}
+
+.analytics-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.stat-card-large {
+    background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+    padding: 1.5rem;
+    border-radius: 15px;
+    border: 1px solid #333;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    transition: transform 0.3s;
+}
+
+.stat-card-large:hover {
+    transform: translateY(-5px);
+}
+
+.stat-icon {
+    font-size: 3rem;
+}
+
+.stat-info {
+    flex: 1;
+}
+
+.stat-label {
+    color: #a0a0a0;
+    font-size: 0.9rem;
+    margin-bottom: 0.5rem;
+}
+
+.stat-value {
+    color: #ffffff;
+    font-size: 1.8rem;
+    font-weight: bold;
+}
+
+.stat-sublabel {
+    color: #666;
+    font-size: 0.75rem;
+    margin-top: 0.2rem;
+}
+
+.analytics-content-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+}
+
+.analytics-chart-container,
+.analytics-table-container {
+    background: #1a1a1a;
+    padding: 1.5rem;
+    border-radius: 15px;
+    border: 1px solid #2d2d2d;
+}
+
+.analytics-chart-container h3,
+.analytics-table-container h3 {
+    color: #ffffff;
+    margin-bottom: 1.5rem;
+}
+
+.top-products-table {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.top-product-row {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem;
+    background: #0a0a0a;
+    border-radius: 10px;
+    transition: background 0.3s;
+}
+
+.top-product-row:hover {
+    background: #2d2d2d;
+}
+
+.top-product-rank {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: #f39c12;
+    min-width: 40px;
+}
+
+.top-product-image {
+    width: 50px;
+    height: 50px;
+    object-fit: cover;
+    border-radius: 8px;
+}
+
+.top-product-info {
+    flex: 1;
+}
+
+.top-product-name {
+    color: #ffffff;
+    font-weight: 600;
+    margin-bottom: 0.3rem;
+}
+
+.top-product-stats {
+    color: #a0a0a0;
+    font-size: 0.85rem;
+}
+
+.top-product-revenue {
+    color: #2ecc71;
+    font-size: 1.1rem;
+    font-weight: bold;
+}
+
+/* ============= RESPONSIVE ============= */
+@media (max-width: 1024px) {
+    .order-row {
+        grid-template-columns: 1fr;
+        gap: 0.5rem;
+    }
+
+    .order-row.header {
+        display: none;
+    }
+
+    .order-cell::before {
+        content: attr(data-label);
+        font-weight: bold;
+        margin-right: 0.5rem;
+        color: #ffffff;
+    }
+
+    .orders-stats {
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    .order-info-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .analytics-content-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .analytics-summary {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 768px) {
+    .header {
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    #headerActions {
+        flex-direction: column;
+        width: 100%;
+    }
+
+    .btn {
+        width: 100%;
+    }
+
+    .cart-item {
+        flex-direction: column;
+    }
+
+    .cart-actions {
+        flex-direction: column;
+    }
+
+    .whatsapp-text {
+        display: none;
+    }
+
+    .whatsapp-float {
+        border-radius: 50%;
+        padding: 15px;
+        width: 60px;
+        height: 60px;
+        justify-content: center;
+        bottom: 20px;
+        right: 20px;
+    }
+
+    .whatsapp-icon {
+        width: 28px;
+        height: 28px;
+    }
+    
+    .analytics-header {
+        flex-direction: column;
+        gap: 1rem;
+    }
+    
+    .analytics-filters {
+        flex-direction: column;
+        width: 100%;
+    }
+    
+    .analytics-filters select,
+    .analytics-filters input[type="date"] {
+        width: 100%;
+    }
+    
+    .analytics-summary {
+        grid-template-columns: 1fr;
+    }
 }
