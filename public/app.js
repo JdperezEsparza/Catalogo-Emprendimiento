@@ -1,7 +1,6 @@
-// Configuración
+//app.js - Sistema completo con usuarios
 const API_URL = '/api';
 
-// TU CONFIGURACIÓN DE PAGO - PERSONALIZA AQUÍ
 const PAYMENT_CONFIG = {
     whatsappNumber: '573115564583',
     nequiNumber: '311 556 4583',
@@ -12,10 +11,19 @@ const PAYMENT_CONFIG = {
     daviplataName: 'Tu Nombre Completo'
 };
 
+const CLOUDINARY_CONFIG = {
+    cloudName: 'dw2caadfi',
+    uploadPreset: 'catalogo_preset'
+};
+
 let isAdmin = false;
+let isLoggedIn = false;
+let userToken = null;
 let adminToken = null;
+let currentUser = null;
 let currentProducts = [];
 let currentOrders = [];
+let userOrders = [];
 let cart = [];
 let currentSection = 'products';
 let orderFilter = 'all';
@@ -44,7 +52,6 @@ async function saveProduct(product) {
             },
             body: JSON.stringify(product)
         });
-
         if (!response.ok) throw new Error('Error al guardar producto');
         const data = await response.json();
         alert('Producto guardado exitosamente');
@@ -66,7 +73,6 @@ async function updateProduct(id, product) {
             },
             body: JSON.stringify(product)
         });
-
         if (!response.ok) throw new Error('Error al actualizar producto');
         const data = await response.json();
         alert('Producto actualizado exitosamente');
@@ -82,11 +88,8 @@ async function deleteProduct(id) {
     try {
         const response = await fetch(`${API_URL}/products/${id}`, {
             method: 'DELETE',
-            headers: {
-                'Authorization': `Bearer ${adminToken}`
-            }
+            headers: { 'Authorization': `Bearer ${adminToken}` }
         });
-
         if (!response.ok) throw new Error('Error al eliminar producto');
         const data = await response.json();
         alert('Producto eliminado exitosamente');
@@ -102,12 +105,9 @@ async function createOrder(orderData) {
     try {
         const response = await fetch(`${API_URL}/orders`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(orderData)
         });
-
         if (!response.ok) throw new Error('Error al crear orden');
         return await response.json();
     } catch (error) {
@@ -126,7 +126,6 @@ async function confirmPayment(orderId, notes) {
             },
             body: JSON.stringify({ payment_notes: notes })
         });
-
         if (!response.ok) {
             const error = await response.json();
             throw new Error(error.error);
@@ -148,7 +147,6 @@ async function cancelOrder(orderId, reason) {
             },
             body: JSON.stringify({ reason })
         });
-
         if (!response.ok) throw new Error('Error al cancelar orden');
         return await response.json();
     } catch (error) {
@@ -161,12 +159,9 @@ async function loginAdmin(username, password) {
     try {
         const response = await fetch(`${API_URL}/auth/login`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username, password })
         });
-
         if (!response.ok) throw new Error('Credenciales incorrectas');
         return await response.json();
     } catch (error) {
@@ -178,9 +173,7 @@ async function loginAdmin(username, password) {
 async function fetchOrders() {
     try {
         const response = await fetch(`${API_URL}/orders`, {
-            headers: {
-                'Authorization': `Bearer ${adminToken}`
-            }
+            headers: { 'Authorization': `Bearer ${adminToken}` }
         });
         if (!response.ok) throw new Error('Error al cargar pedidos');
         return await response.json();
@@ -193,9 +186,7 @@ async function fetchOrders() {
 async function fetchOrderDetail(orderId) {
     try {
         const response = await fetch(`${API_URL}/orders/${orderId}`, {
-            headers: {
-                'Authorization': `Bearer ${adminToken}`
-            }
+            headers: { 'Authorization': `Bearer ${adminToken}` }
         });
         if (!response.ok) throw new Error('Error al cargar detalle');
         return await response.json();
@@ -215,8 +206,100 @@ async function updateOrderStatus(orderId, status) {
             },
             body: JSON.stringify({ status })
         });
-
         if (!response.ok) throw new Error('Error al actualizar estado');
+        return await response.json();
+    } catch (error) {
+        console.error('Error:', error);
+        throw error;
+    }
+}
+
+// ============= FUNCIONES DE USUARIOS =============
+
+async function registerUser(userData) {
+    try {
+        const response = await fetch(`${API_URL}/users/register`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(userData)
+        });
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Error al registrar');
+        }
+        return await response.json();
+    } catch (error) {
+        throw error;
+    }
+}
+
+async function loginUser(email, password) {
+    try {
+        const response = await fetch(`${API_URL}/users/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password })
+        });
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Error al iniciar sesión');
+        }
+        return await response.json();
+    } catch (error) {
+        throw error;
+    }
+}
+
+async function getUserProfile() {
+    try {
+        const response = await fetch(`${API_URL}/users/profile`, {
+            headers: { 'Authorization': `Bearer ${userToken}` }
+        });
+        if (!response.ok) throw new Error('Error al obtener perfil');
+        return await response.json();
+    } catch (error) {
+        console.error('Error:', error);
+        throw error;
+    }
+}
+
+async function updateUserProfile(data) {
+    try {
+        const response = await fetch(`${API_URL}/users/profile`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${userToken}`
+            },
+            body: JSON.stringify(data)
+        });
+        if (!response.ok) throw new Error('Error al actualizar perfil');
+        return await response.json();
+    } catch (error) {
+        console.error('Error:', error);
+        throw error;
+    }
+}
+
+async function getUserOrders() {
+    try {
+        const response = await fetch(`${API_URL}/users/orders`, {
+            headers: { 'Authorization': `Bearer ${userToken}` }
+        });
+        if (!response.ok) throw new Error('Error al cargar pedidos');
+        return await response.json();
+    } catch (error) {
+        console.error('Error:', error);
+        throw error;
+    }
+}
+
+async function getUserOrderDetail(orderId) {
+    try {
+        const response = await fetch(`${API_URL}/users/orders/${orderId}`, {
+            headers: { 'Authorization': `Bearer ${userToken}` }
+        });
+        if (!response.ok) throw new Error('Error al cargar detalle');
         return await response.json();
     } catch (error) {
         console.error('Error:', error);
@@ -305,12 +388,25 @@ function renderHeader() {
             <button class="btn btn-danger" onclick="logout()">Cerrar Sesión</button>
         `;
         adminNav.style.display = 'flex';
+    } else if (isLoggedIn) {
+        actions.innerHTML = `
+            <span style="color: #fff; margin-right: 1rem;">👤 ${currentUser.name}</span>
+            <button class="btn btn-cart" onclick="openModal('cartModal')">
+                🛒 Carrito (<span id="cartCount">0</span>)
+            </button>
+            <button class="btn btn-secondary" onclick="showMyOrders()">Mis Pedidos</button>
+            <button class="btn btn-primary" onclick="openModal('profileModal')">Mi Perfil</button>
+            <button class="btn btn-danger" onclick="logoutUser()">Salir</button>
+        `;
+        adminNav.style.display = 'none';
     } else {
         actions.innerHTML = `
             <button class="btn btn-cart" onclick="openModal('cartModal')">
                 🛒 Carrito (<span id="cartCount">0</span>)
             </button>
-            <button class="btn btn-primary" onclick="openModal('loginModal')">Login Admin</button>
+            <button class="btn btn-primary" onclick="openModal('userLoginModal')">Iniciar Sesión</button>
+            <button class="btn btn-secondary" onclick="openModal('registerModal')">Registrarse</button>
+            <button class="btn" onclick="openModal('loginModal')" style="background: #666;">Admin</button>
         `;
         adminNav.style.display = 'none';
     }
@@ -700,18 +796,18 @@ async function renderOrderDetail(orderId) {
                             <div>
                                 <div class="order-item-name">${item.product_name}</div>
                                 <div class="order-item-details">
-                                    Cantidad: ${item.quantity} × $${parseFloat(item.product_price).toLocaleString('es-CO')}
+                                    Cantidad: ${item.quantity} × ${parseFloat(item.product_price).toLocaleString('es-CO')}
                                 </div>
                             </div>
                             <div class="order-item-price">
-                                $${parseFloat(item.subtotal).toLocaleString('es-CO')}
+                                ${parseFloat(item.subtotal).toLocaleString('es-CO')}
                             </div>
                         </div>
                     `).join('')}
                     
                     <div class="order-item-row" style="border-top: 2px solid #2d2d2d; margin-top: 1rem; padding-top: 1rem;">
                         <div class="order-item-name">Subtotal</div>
-                        <div class="order-item-price">$${parseFloat(order.subtotal).toLocaleString('es-CO')}</div>
+                        <div class="order-item-price">${parseFloat(order.subtotal).toLocaleString('es-CO')}</div>
                     </div>
                     <div class="order-item-row">
                         <div class="order-item-name">Envío</div>
@@ -721,7 +817,7 @@ async function renderOrderDetail(orderId) {
                     </div>
                     <div class="order-item-row" style="font-size: 1.2rem;">
                         <div class="order-item-name">Total</div>
-                        <div class="order-item-price">$${parseFloat(order.total).toLocaleString('es-CO')}</div>
+                        <div class="order-item-price">${parseFloat(order.total).toLocaleString('es-CO')}</div>
                     </div>
                 </div>
             </div>
@@ -776,6 +872,201 @@ async function renderOrderDetail(orderId) {
     }
 }
 
+async function showMyOrders() {
+    if (!isLoggedIn) {
+        alert('Debes iniciar sesión para ver tus pedidos');
+        return;
+    }
+
+    const content = document.getElementById('catalogContent');
+    content.innerHTML = '<div class="loading">Cargando tus pedidos...</div>';
+
+    try {
+        userOrders = await getUserOrders();
+        
+        if (userOrders.length === 0) {
+            content.innerHTML = `
+                <div class="empty-state">
+                    <h3>📦 Aún no tienes pedidos</h3>
+                    <p>Cuando realices tu primera compra, aparecerá aquí</p>
+                    <button class="btn btn-primary" onclick="location.reload()">Ver Catálogo</button>
+                </div>
+            `;
+            return;
+        }
+
+        const statusNames = {
+            pending_payment: 'Esperando Pago',
+            pending: 'Pendiente',
+            processing: 'Procesando',
+            shipped: 'Enviado',
+            delivered: 'Entregado',
+            cancelled: 'Cancelado'
+        };
+
+        content.innerHTML = `
+            <div style="padding: 2rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+                    <h2 style="color: #fff;">📋 Mis Pedidos</h2>
+                    <button class="btn btn-secondary" onclick="location.reload()">Volver al Catálogo</button>
+                </div>
+
+                <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+                    ${userOrders.map(order => {
+                        const date = new Date(order.created_at);
+                        const formattedDate = date.toLocaleDateString('es-CO', {
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric'
+                        });
+
+                        return `
+                            <div style="background: #1a1a1a; border-radius: 15px; padding: 1.5rem; border: 1px solid #2d2d2d; cursor: pointer; transition: transform 0.3s;" onclick="viewUserOrderDetail(${order.id})">
+                                <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 1rem;">
+                                    <div>
+                                        <div style="color: #fff; font-weight: bold; font-size: 1.1rem; margin-bottom: 0.5rem;">
+                                            ${order.order_number}
+                                        </div>
+                                        <div style="color: #a0a0a0; font-size: 0.9rem;">
+                                            ${formattedDate} • ${order.items_count} producto(s)
+                                        </div>
+                                    </div>
+                                    <span class="status-badge status-${order.status}">
+                                        ${statusNames[order.status]}
+                                    </span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 1rem; border-top: 1px solid #2d2d2d;">
+                                    <div style="color: #2ecc71; font-size: 1.3rem; font-weight: bold;">
+                                        ${parseFloat(order.total).toLocaleString('es-CO')}
+                                    </div>
+                                    <div style="color: #3498db;">
+                                        Ver detalle →
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            </div>
+        `;
+    } catch (error) {
+        content.innerHTML = `
+            <div class="empty-state">
+                <h3>Error al cargar pedidos</h3>
+                <p>${error.message}</p>
+                <button class="btn btn-primary" onclick="location.reload()">Reintentar</button>
+            </div>
+        `;
+    }
+}
+
+async function viewUserOrderDetail(orderId) {
+    openModal('userOrderDetailModal');
+    const content = document.getElementById('userOrderDetailContent');
+    content.innerHTML = '<div class="loading">Cargando detalle...</div>';
+
+    try {
+        const order = await getUserOrderDetail(orderId);
+
+        const statusNames = {
+            pending_payment: 'Esperando Pago',
+            pending: 'Pendiente',
+            processing: 'Procesando',
+            shipped: 'Enviado',
+            delivered: 'Entregado',
+            cancelled: 'Cancelado'
+        };
+
+        const date = new Date(order.created_at);
+        const formattedDate = date.toLocaleDateString('es-CO', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+
+        content.innerHTML = `
+            <div class="order-detail-section">
+                <h3>Información del Pedido</h3>
+                <div class="order-info-grid">
+                    <div class="order-info-item">
+                        <div class="order-info-label">Número de Orden</div>
+                        <div class="order-info-value">${order.order_number}</div>
+                    </div>
+                    <div class="order-info-item">
+                        <div class="order-info-label">Estado</div>
+                        <div class="order-info-value">
+                            <span class="status-badge status-${order.status}">
+                                ${statusNames[order.status]}
+                            </span>
+                        </div>
+                    </div>
+                    <div class="order-info-item">
+                        <div class="order-info-label">Fecha del Pedido</div>
+                        <div class="order-info-value">${formattedDate}</div>
+                    </div>
+                    <div class="order-info-item">
+                        <div class="order-info-label">Total</div>
+                        <div class="order-info-value">${parseFloat(order.total).toLocaleString('es-CO')}</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="order-detail-section">
+                <h3>Productos</h3>
+                <div class="order-items-list">
+                    ${order.items.map(item => `
+                        <div class="order-item-row">
+                            <div>
+                                <div class="order-item-name">${item.product_name}</div>
+                                <div class="order-item-details">
+                                    Cantidad: ${item.quantity} × ${parseFloat(item.product_price).toLocaleString('es-CO')}
+                                </div>
+                            </div>
+                            <div class="order-item-price">
+                                ${parseFloat(item.subtotal).toLocaleString('es-CO')}
+                            </div>
+                        </div>
+                    `).join('')}
+                    
+                    <div class="order-item-row" style="border-top: 2px solid #2d2d2d; margin-top: 1rem; padding-top: 1rem;">
+                        <div class="order-item-name">Subtotal</div>
+                        <div class="order-item-price">${parseFloat(order.subtotal).toLocaleString('es-CO')}</div>
+                    </div>
+                    <div class="order-item-row">
+                        <div class="order-item-name">Envío</div>
+                        <div class="order-item-price">
+                            ${parseFloat(order.shipping) === 0 ? '¡Gratis!' : '$' + parseFloat(order.shipping).toLocaleString('es-CO')}
+                        </div>
+                    </div>
+                    <div class="order-item-row" style="font-size: 1.2rem;">
+                        <div class="order-item-name">Total</div>
+                        <div class="order-item-price">${parseFloat(order.total).toLocaleString('es-CO')}</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="order-detail-section">
+                <h3>Dirección de Envío</h3>
+                <div class="order-info-item">
+                    <div class="order-info-value">
+                        ${order.customer_address || 'No especificada'}<br>
+                        ${order.customer_city || ''}
+                    </div>
+                </div>
+            </div>
+        `;
+    } catch (error) {
+        content.innerHTML = `
+            <div class="empty-state">
+                <h3>Error al cargar detalle</h3>
+                <p>${error.message}</p>
+            </div>
+        `;
+    }
+}
+
 // ============= FUNCIONES DE NAVEGACIÓN =============
 
 function showSection(section) {
@@ -796,6 +1087,7 @@ function showSection(section) {
     if (section === 'products') {
         catalogContent.style.display = 'block';
         document.querySelectorAll('.nav-btn')[0].classList.add('active');
+        loadProducts();
     } else if (section === 'orders') {
         ordersContent.style.display = 'block';
         document.querySelectorAll('.nav-btn')[1].classList.add('active');
@@ -972,6 +1264,9 @@ function openModal(modalId) {
     if (modalId === 'cartModal') {
         renderCart();
     }
+    if (modalId === 'profileModal' && isLoggedIn) {
+        loadUserProfile();
+    }
 }
 
 function closeModal(modalId) {
@@ -982,6 +1277,7 @@ function openProductModal(product = null) {
     const modal = document.getElementById('productModal');
     const title = document.getElementById('productModalTitle');
     const form = document.getElementById('productForm');
+    const imagePreview = document.getElementById('productImagePreview');
 
     if (product) {
         title.textContent = 'Editar Prenda';
@@ -991,10 +1287,16 @@ function openProductModal(product = null) {
         document.getElementById('productPrice').value = product.price;
         document.getElementById('productStock').value = product.stock;
         document.getElementById('productImage').value = product.image;
+        
+        if (product.image) {
+            imagePreview.src = product.image;
+            imagePreview.style.display = 'block';
+        }
     } else {
         title.textContent = 'Nueva Prenda';
         form.reset();
         document.getElementById('productId').value = '';
+        imagePreview.style.display = 'none';
     }
 
     openModal('productModal');
@@ -1026,6 +1328,15 @@ function proceedToCheckout() {
     closeModal('cartModal');
     const total = getCartTotal() + (getCartTotal() > 150000 ? 0 : 15000);
     document.getElementById('checkoutTotal').textContent = '$' + total.toLocaleString('es-CO');
+    
+    if (isLoggedIn && currentUser) {
+        document.getElementById('customerName').value = currentUser.name;
+        document.getElementById('customerEmail').value = currentUser.email;
+        document.getElementById('customerPhone').value = currentUser.phone || '';
+        document.getElementById('customerAddress').value = currentUser.address || '';
+        document.getElementById('customerCity').value = currentUser.city || '';
+    }
+    
     openModal('checkoutModal');
 }
 
@@ -1039,7 +1350,26 @@ function logout() {
     renderCatalog();
 }
 
-// ============= FUNCIÓN DE PAGO POR WHATSAPP =============
+function logoutUser() {
+    isLoggedIn = false;
+    userToken = null;
+    currentUser = null;
+    renderHeader();
+    location.reload();
+}
+
+async function loadUserProfile() {
+    try {
+        const profile = await getUserProfile();
+        document.getElementById('profileName').value = profile.name;
+        document.getElementById('profileEmail').value = profile.email;
+        document.getElementById('profilePhone').value = profile.phone || '';
+        document.getElementById('profileAddress').value = profile.address || '';
+        document.getElementById('profileCity').value = profile.city || '';
+    } catch (error) {
+        alert('Error al cargar perfil');
+    }
+}
 
 function showPaymentInstructions(whatsappURL, total) {
     closeModal('checkoutModal');
@@ -1128,8 +1458,6 @@ function closePaymentInstructions() {
     closeModal('checkoutModal');
 }
 
-// ============= CARGA DE DATOS =============
-
 async function loadProducts() {
     const content = document.getElementById('catalogContent');
     content.innerHTML = '<div class="loading">Cargando productos...</div>';
@@ -1170,6 +1498,119 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
     }
 });
 
+document.getElementById('registerForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const userData = {
+        name: document.getElementById('registerName').value,
+        email: document.getElementById('registerEmail').value,
+        password: document.getElementById('registerPassword').value,
+        phone: document.getElementById('registerPhone').value,
+        address: document.getElementById('registerAddress').value,
+        city: document.getElementById('registerCity').value
+    };
+
+    const confirmPassword = document.getElementById('registerConfirmPassword').value;
+
+    if (userData.password !== confirmPassword) {
+        alert('Las contraseñas no coinciden');
+        return;
+    }
+
+    try {
+        const result = await registerUser(userData);
+
+        if (result.success) {
+            isLoggedIn = true;
+            userToken = result.token;
+            currentUser = result.user;
+            closeModal('registerModal');
+            renderHeader();
+            alert('¡Registro exitoso! Bienvenido ' + result.user.name);
+        }
+    } catch (error) {
+        alert(error.message || 'Error al registrar usuario');
+    }
+});
+
+document.getElementById('userLoginForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const email = document.getElementById('userLoginEmail').value;
+    const password = document.getElementById('userLoginPassword').value;
+
+    try {
+        const result = await loginUser(email, password);
+
+        if (result.success) {
+            isLoggedIn = true;
+            userToken = result.token;
+            currentUser = result.user;
+            closeModal('userLoginModal');
+            renderHeader();
+            alert('¡Bienvenido de nuevo ' + result.user.name + '!');
+        }
+    } catch (error) {
+        alert(error.message || 'Error al iniciar sesión');
+    }
+});
+
+document.getElementById('profileForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const data = {
+        name: document.getElementById('profileName').value,
+        phone: document.getElementById('profilePhone').value,
+        address: document.getElementById('profileAddress').value,
+        city: document.getElementById('profileCity').value
+    };
+
+    try {
+        await updateUserProfile(data);
+        currentUser = { ...currentUser, ...data };
+        alert('Perfil actualizado exitosamente');
+        closeModal('profileModal');
+        renderHeader();
+    } catch (error) {
+        alert('Error al actualizar perfil');
+    }
+});
+
+document.getElementById('changePasswordForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const currentPassword = document.getElementById('currentPassword').value;
+    const newPassword = document.getElementById('newPassword').value;
+    const confirmNewPassword = document.getElementById('confirmNewPassword').value;
+
+    if (newPassword !== confirmNewPassword) {
+        alert('Las nuevas contraseñas no coinciden');
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_URL}/users/change-password`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${userToken}`
+            },
+            body: JSON.stringify({ currentPassword, newPassword })
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error);
+        }
+
+        alert('Contraseña actualizada exitosamente');
+        document.getElementById('changePasswordForm').reset();
+        closeModal('changePasswordModal');
+    } catch (error) {
+        alert(error.message || 'Error al cambiar contraseña');
+    }
+});
+
 document.getElementById('productForm').addEventListener('submit', async (e) => {
     e.preventDefault();
 
@@ -1206,7 +1647,6 @@ document.getElementById('checkoutForm').addEventListener('submit', async (e) => 
     const shipping = subtotal > 150000 ? 0 : 15000;
     const total = subtotal + shipping;
 
-    // Generar mensaje detallado para WhatsApp
     let mensaje = `🛍️ *NUEVO PEDIDO*%0A%0A`;
     mensaje += `👤 *Cliente:* ${customerName}%0A`;
     mensaje += `📧 *Email:* ${customerEmail}%0A`;
@@ -1230,7 +1670,6 @@ document.getElementById('checkoutForm').addEventListener('submit', async (e) => 
     mensaje += `✨ *TOTAL A PAGAR:* ${total.toLocaleString('es-CO')}%0A%0A`;
     mensaje += `Estoy listo para realizar el pago 😊`;
 
-    // Guardar pedido pendiente en base de datos
     try {
         const orderData = {
             customer: {
@@ -1243,19 +1682,15 @@ document.getElementById('checkoutForm').addEventListener('submit', async (e) => 
             items: cart,
             subtotal: subtotal,
             shipping: shipping,
-            total: total
+            total: total,
+            userId: isLoggedIn && currentUser ? currentUser.id : null
         };
 
         const result = await createOrder(orderData);
 
         if (result.success) {
-            // Construir URL de WhatsApp
             const whatsappURL = `https://wa.me/${PAYMENT_CONFIG.whatsappNumber}?text=${mensaje}`;
-
-            // Mostrar instrucciones de pago
             showPaymentInstructions(whatsappURL, total);
-
-            // Limpiar carrito y formulario
             clearCart();
             document.getElementById('checkoutForm').reset();
         }
@@ -1277,7 +1712,6 @@ function formatCurrency(amount) {
         return '$' + Math.round(num).toLocaleString('es-CO');
     }
 }
-
 
 let analyticsChart = null;
 
@@ -1309,7 +1743,7 @@ async function loadAnalytics() {
 }
 
 function getDateRange() {
-    const filter = currentAnalyticsFilter; // Usar la variable global
+    const filter = currentAnalyticsFilter;
     const end = new Date();
     const start = new Date();
 
@@ -1344,16 +1778,9 @@ function getDateRange() {
         end: end.toISOString().split('T')[0]
     };
 }
+
 function renderAnalytics(topProducts, summary) {
     const content = document.getElementById('analyticsContent');
-
-    const filterLabels = {
-        today: 'Hoy',
-        week: 'Última semana',
-        month: 'Último mes',
-        year: 'Último año',
-        custom: 'Personalizado'
-    };
 
     content.innerHTML = `
     <div class="analytics-container">
@@ -1442,11 +1869,11 @@ function renderAnalytics(topProducts, summary) {
     </div>
     `;
 
-    // Renderizar gráfico de pastel
     if (topProducts.length > 0) {
         renderPieChart(topProducts);
     }
 }
+
 function renderPieChart(products) {
     const ctx = document.getElementById('topProductsChart');
 
@@ -1488,7 +1915,7 @@ function renderPieChart(products) {
                     callbacks: {
                         label: function (context) {
                             const product = products[context.dataIndex];
-                            return `${product.name}: ${product.total_vendido} vendidos ($${parseFloat(product.ingresos_totales).toLocaleString('es-CO')})`;
+                            return `${product.name}: ${product.total_vendido} vendidos (${parseFloat(product.ingresos_totales).toLocaleString('es-CO')})`;
                         }
                     }
                 }
@@ -1500,13 +1927,11 @@ function renderPieChart(products) {
 function changeAnalyticsFilter(value) {
     currentAnalyticsFilter = value;
     
-    // Mostrar/ocultar el selector de fechas personalizadas
     const customRange = document.getElementById('customDateRange');
     if (customRange) {
         customRange.style.display = value === 'custom' ? 'flex' : 'none';
     }
     
-    // Si no es personalizado, recargar automáticamente
     if (value !== 'custom') {
         loadAnalytics();
     }
@@ -1527,6 +1952,126 @@ function applyCustomDateRange() {
     }
     
     loadAnalytics();
+}
+
+// ============= CLOUDINARY UPLOAD =============
+
+async function uploadImageToCloudinary(file, onProgress) {
+    try {
+        if (!file.type.startsWith('image/')) {
+            throw new Error('Solo se permiten archivos de imagen');
+        }
+
+        if (file.size > 10 * 1024 * 1024) {
+            throw new Error('La imagen es muy grande. Máximo 10MB');
+        }
+
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('upload_preset', CLOUDINARY_CONFIG.uploadPreset);
+        formData.append('folder', 'catalogo-prendas');
+
+        return new Promise((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+
+            xhr.upload.addEventListener('progress', (e) => {
+                if (e.lengthComputable && onProgress) {
+                    const percentComplete = (e.loaded / e.total) * 100;
+                    onProgress(Math.round(percentComplete));
+                }
+            });
+
+            xhr.addEventListener('load', () => {
+                if (xhr.status === 200) {
+                    const response = JSON.parse(xhr.responseText);
+                    resolve(response.secure_url);
+                } else {
+                    reject(new Error('Error al subir imagen'));
+                }
+            });
+
+            xhr.addEventListener('error', () => {
+                reject(new Error('Error de red al subir imagen'));
+            });
+
+            xhr.open('POST', `https://api.cloudinary.com/v1_1/${CLOUDINARY_CONFIG.cloudName}/image/upload`);
+            xhr.send(formData);
+        });
+
+    } catch (error) {
+        console.error('Error al subir imagen:', error);
+        throw error;
+    }
+}
+
+async function handleProductImageUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const uploadBtn = document.getElementById('uploadImageBtn');
+    const progressBar = document.getElementById('uploadProgress');
+    const progressFill = document.getElementById('uploadProgressFill');
+    const progressText = document.getElementById('uploadProgressText');
+    const imagePreview = document.getElementById('productImagePreview');
+    const imageInput = document.getElementById('productImage');
+
+    try {
+        const localPreview = URL.createObjectURL(file);
+        imagePreview.src = localPreview;
+        imagePreview.style.display = 'block';
+
+        uploadBtn.disabled = true;
+        uploadBtn.textContent = '⏳ Subiendo...';
+
+        progressBar.style.display = 'block';
+
+        const imageUrl = await uploadImageToCloudinary(file, (percent) => {
+            progressFill.style.width = percent + '%';
+            progressText.textContent = percent + '%';
+        });
+
+        imageInput.value = imageUrl;
+
+        uploadBtn.textContent = '✅ Imagen subida';
+        uploadBtn.style.background = '#2ecc71';
+
+        alert('✅ Imagen subida exitosamente');
+
+        setTimeout(() => {
+            uploadBtn.disabled = false;
+            uploadBtn.textContent = '📸 Subir Imagen';
+            uploadBtn.style.background = '';
+            progressBar.style.display = 'none';
+            progressFill.style.width = '0%';
+            progressText.textContent = '0%';
+        }, 2000);
+
+    } catch (error) {
+        alert('❌ Error: ' + error.message);
+        uploadBtn.disabled = false;
+        uploadBtn.textContent = '📸 Subir Imagen';
+        progressBar.style.display = 'none';
+        imagePreview.style.display = 'none';
+    }
+}
+
+function toggleUrlInput() {
+    const urlSection = document.getElementById('urlInputSection');
+    const isHidden = urlSection.style.display === 'none';
+    urlSection.style.display = isHidden ? 'block' : 'none';
+    
+    if (isHidden) {
+        document.getElementById('productImageUrl').focus();
+    }
+}
+
+function updateImageFromUrl(url) {
+    if (url) {
+        document.getElementById('productImage').value = url;
+        const preview = document.getElementById('productImagePreview');
+        preview.src = url;
+        preview.style.display = 'block';
+    }
 }
 
 // ============= INICIALIZACIÓN =============

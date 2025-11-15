@@ -28,6 +28,97 @@ const dbConfig = {
 
 const pool = mysql.createPool(dbConfig);
 
+// Función para inicializar las tablas
+async function initializeDatabase() {
+    try {
+        const connection = await pool.getConnection();
+        
+        // Crear tabla de usuarios
+        await connection.query(`
+            CREATE TABLE IF NOT EXISTS users (
+                id INT PRIMARY KEY AUTO_INCREMENT,
+                name VARCHAR(255) NOT NULL,
+                email VARCHAR(255) UNIQUE NOT NULL,
+                password_hash VARCHAR(255) NOT NULL,
+                phone VARCHAR(20),
+                address TEXT,
+                city VARCHAR(100),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            )
+        `);
+
+        // Crear tabla de productos si no existe
+        await connection.query(`
+            CREATE TABLE IF NOT EXISTS products (
+                id INT PRIMARY KEY AUTO_INCREMENT,
+                name VARCHAR(255) NOT NULL,
+                description TEXT,
+                price INT NOT NULL,
+                stock INT NOT NULL DEFAULT 0,
+                image VARCHAR(500),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            )
+        `);
+
+        // Crear tabla de órdenes si no existe
+        await connection.query(`
+            CREATE TABLE IF NOT EXISTS orders (
+                id INT PRIMARY KEY AUTO_INCREMENT,
+                order_number VARCHAR(50) UNIQUE NOT NULL,
+                customer_name VARCHAR(255) NOT NULL,
+                customer_email VARCHAR(255) NOT NULL,
+                customer_phone VARCHAR(20),
+                customer_address TEXT,
+                customer_city VARCHAR(100),
+                subtotal INT NOT NULL,
+                shipping INT NOT NULL,
+                total INT NOT NULL,
+                status ENUM('pending_payment', 'pending', 'processing', 'shipped', 'delivered', 'cancelled') DEFAULT 'pending_payment',
+                payment_method VARCHAR(50),
+                paid_at TIMESTAMP NULL,
+                confirmed_by INT,
+                payment_notes TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            )
+        `);
+
+        // Crear tabla de ítems de órdenes si no existe
+        await connection.query(`
+            CREATE TABLE IF NOT EXISTS order_items (
+                id INT PRIMARY KEY AUTO_INCREMENT,
+                order_id INT NOT NULL,
+                product_id INT NOT NULL,
+                product_name VARCHAR(255) NOT NULL,
+                product_price INT NOT NULL,
+                quantity INT NOT NULL,
+                subtotal INT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
+                FOREIGN KEY (product_id) REFERENCES products(id)
+            )
+        `);
+
+        // Crear tabla de admins si no existe
+        await connection.query(`
+            CREATE TABLE IF NOT EXISTS admins (
+                id INT PRIMARY KEY AUTO_INCREMENT,
+                username VARCHAR(100) UNIQUE NOT NULL,
+                email VARCHAR(255) UNIQUE NOT NULL,
+                password_hash VARCHAR(255) NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+
+        connection.release();
+        console.log('✅ Base de datos inicializada correctamente');
+    } catch (error) {
+        console.error('❌ Error inicializando base de datos:', error);
+    }
+}
+
 // Middleware para verificar token admin
 const verifyAdmin = async (req, res, next) => {
     try {
@@ -38,6 +129,22 @@ const verifyAdmin = async (req, res, next) => {
 
         const decoded = jwt.verify(token, process.env.JWT_SECRET || 'tu_clave_secreta_cambiala');
         req.adminId = decoded.id;
+        next();
+    } catch (error) {
+        return res.status(401).json({ error: 'Token inválido' });
+    }
+};
+
+// Middleware para verificar token usuario
+const verifyUser = async (req, res, next) => {
+    try {
+        const token = req.headers.authorization?.split(' ')[1];
+        if (!token) {
+            return res.status(401).json({ error: 'Token no proporcionado' });
+        }
+
+        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'tu_clave_secreta_cambiala');
+        req.userId = decoded.id;
         next();
     } catch (error) {
         return res.status(401).json({ error: 'Token inválido' });
@@ -84,6 +191,234 @@ app.post('/api/auth/login', async (req, res) => {
     } catch (error) {
         console.error('Error en login:', error);
         res.status(500).json({ error: 'Error en el servidor' });
+    }
+});
+
+// ============= RUTAS DE USUARIOS =============
+
+// Registrar usuario
+app.post('/api/users/register', async (req, res) => {
+    try {
+        const { name, email, password, phone, address, city } = req.body;
+
+        // Validar que no exista el usuario
+        const [existingUsers] = await pool.query(
+            'SELECT id FROM users WHERE email = ?',
+            [email]
+        );
+
+        if (existingUsers.length > 0) {
+            return res.status(400).json({ error: 'El email ya está registrado' });
+        }
+
+        // Encriptar contraseña
+        const hashedPassword = await bcrypt.hash(password, 10);
+
+        // Crear usuario
+        const [result] = await pool.query(
+            `INSERT INTO users (name, email, password_hash, phone, address, city) 
+             VALUES (?, ?, ?, ?, ?, ?)`,
+            [name, email, hashedPassword, phone || '', address || '', city || '']
+        );
+
+        const userId = result.insertId;
+
+        // Generar token
+        const token = jwt.sign(
+            { id: userId, email: email },
+            process.env.JWT_SECRET || 'tu_clave_secreta_cambiala',
+            { expiresIn: '7d' }
+        );
+
+        res.status(201).json({
+            success: true,
+            token,
+            user: {
+                id: userId,
+                name,
+                email,
+                phone: phone || '',
+                address: address || '',
+                city: city || ''
+            }
+        });
+    } catch (error) {
+        console.error('Error al registrar usuario:', error);
+        res.status(500).json({ error: 'Error al registrar usuario' });
+    }
+});
+
+// Login usuario
+app.post('/api/users/login', async (req, res) => {
+    try {
+        const { email, password } = req.body;
+
+        const [users] = await pool.query(
+            'SELECT * FROM users WHERE email = ?',
+            [email]
+        );
+
+        if (users.length === 0) {
+            return res.status(401).json({ error: 'Credenciales incorrectas' });
+        }
+
+        const user = users[0];
+        const validPassword = await bcrypt.compare(password, user.password_hash);
+
+        if (!validPassword) {
+            return res.status(401).json({ error: 'Credenciales incorrectas' });
+        }
+
+        const token = jwt.sign(
+            { id: user.id, email: user.email },
+            process.env.JWT_SECRET || 'tu_clave_secreta_cambiala',
+            { expiresIn: '7d' }
+        );
+
+        res.json({
+            success: true,
+            token,
+            user: {
+                id: user.id,
+                name: user.name,
+                email: user.email,
+                phone: user.phone,
+                address: user.address,
+                city: user.city
+            }
+        });
+    } catch (error) {
+        console.error('Error en login usuario:', error);
+        res.status(500).json({ error: 'Error en el servidor' });
+    }
+});
+
+// Obtener perfil usuario
+app.get('/api/users/profile', verifyUser, async (req, res) => {
+    try {
+        const [users] = await pool.query(
+            'SELECT id, name, email, phone, address, city FROM users WHERE id = ?',
+            [req.userId]
+        );
+
+        if (users.length === 0) {
+            return res.status(404).json({ error: 'Usuario no encontrado' });
+        }
+
+        res.json(users[0]);
+    } catch (error) {
+        console.error('Error al obtener perfil:', error);
+        res.status(500).json({ error: 'Error al obtener perfil' });
+    }
+});
+
+// Actualizar perfil usuario
+app.put('/api/users/profile', verifyUser, async (req, res) => {
+    try {
+        const { name, phone, address, city } = req.body;
+
+        await pool.query(
+            'UPDATE users SET name = ?, phone = ?, address = ?, city = ? WHERE id = ?',
+            [name, phone || '', address || '', city || '', req.userId]
+        );
+
+        res.json({
+            success: true,
+            message: 'Perfil actualizado exitosamente'
+        });
+    } catch (error) {
+        console.error('Error al actualizar perfil:', error);
+        res.status(500).json({ error: 'Error al actualizar perfil' });
+    }
+});
+
+// Cambiar contraseña usuario
+app.put('/api/users/change-password', verifyUser, async (req, res) => {
+    try {
+        const { currentPassword, newPassword } = req.body;
+
+        const [users] = await pool.query(
+            'SELECT password_hash FROM users WHERE id = ?',
+            [req.userId]
+        );
+
+        if (users.length === 0) {
+            return res.status(404).json({ error: 'Usuario no encontrado' });
+        }
+
+        const validPassword = await bcrypt.compare(currentPassword, users[0].password_hash);
+
+        if (!validPassword) {
+            return res.status(401).json({ error: 'Contraseña actual incorrecta' });
+        }
+
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+        await pool.query(
+            'UPDATE users SET password_hash = ? WHERE id = ?',
+            [hashedPassword, req.userId]
+        );
+
+        res.json({
+            success: true,
+            message: 'Contraseña actualizada exitosamente'
+        });
+    } catch (error) {
+        console.error('Error al cambiar contraseña:', error);
+        res.status(500).json({ error: 'Error al cambiar contraseña' });
+    }
+});
+
+// Obtener órdenes del usuario
+app.get('/api/users/orders', verifyUser, async (req, res) => {
+    try {
+        const [orders] = await pool.query(
+            `SELECT 
+                o.id,
+                o.order_number,
+                o.total,
+                o.status,
+                o.created_at,
+                (SELECT COUNT(*) FROM order_items WHERE order_id = o.id) as items_count
+             FROM orders o
+             WHERE o.customer_email = (SELECT email FROM users WHERE id = ?)
+             ORDER BY o.created_at DESC`,
+            [req.userId]
+        );
+
+        res.json(orders);
+    } catch (error) {
+        console.error('Error al obtener órdenes:', error);
+        res.status(500).json({ error: 'Error al obtener órdenes' });
+    }
+});
+
+// Obtener detalle de orden del usuario
+app.get('/api/users/orders/:id', verifyUser, async (req, res) => {
+    try {
+        const [orders] = await pool.query(
+            `SELECT o.*
+             FROM orders o
+             WHERE o.id = ? AND o.customer_email = (SELECT email FROM users WHERE id = ?)`,
+            [req.params.id, req.userId]
+        );
+
+        if (orders.length === 0) {
+            return res.status(404).json({ error: 'Orden no encontrada' });
+        }
+
+        const [items] = await pool.query(
+            'SELECT * FROM order_items WHERE order_id = ?',
+            [req.params.id]
+        );
+
+        res.json({
+            ...orders[0],
+            items
+        });
+    } catch (error) {
+        console.error('Error al obtener orden:', error);
+        res.status(500).json({ error: 'Error al obtener orden' });
     }
 });
 
@@ -548,8 +883,11 @@ app.get('/api/health', (req, res) => {
 });
 
 // ============= INICIAR SERVIDOR =============
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
     console.log(`🚀 Servidor corriendo en puerto ${PORT}`);
     console.log(`📡 API disponible en http://localhost:${PORT}/api`);
     console.log(`💰 Sistema de pago manual por WhatsApp activado`);
+    
+    // Inicializar base de datos
+    await initializeDatabase();
 });

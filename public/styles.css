@@ -1,3 +1,4 @@
+/* styles.css */
 * {
     margin: 0;
     padding: 0;
@@ -1091,4 +1092,19 @@ body {
     .analytics-summary {
         grid-template-columns: 1fr;
     }
+}
+/* Estilos adicionales para el upload */
+.form-control {
+    width: 100%;
+    padding: 0.8rem;
+    border: 2px solid #2d2d2d;
+    border-radius: 8px;
+    font-size: 1rem;
+    background: #0a0a0a;
+    color: #ffffff;
+}
+
+.form-control:focus {
+    outline: none;
+    border-color: #ffffff;
 }
