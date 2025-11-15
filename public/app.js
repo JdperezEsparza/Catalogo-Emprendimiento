@@ -29,6 +29,73 @@ let currentSection = 'products';
 let orderFilter = 'all';
 let currentAnalyticsFilter = 'month';
 
+
+// ============= FUNCIONES DE SESIÓN PERSISTENTE =============
+function saveSession() {
+    const session = {
+        isAdmin,
+        isLoggedIn,
+        userToken,
+        adminToken,
+        currentUser
+    };
+    localStorage.setItem('catalogoSession', JSON.stringify(session));
+}
+
+function loadSession() {
+    try {
+        const sessionData = localStorage.getItem('catalogoSession');
+        if (sessionData) {
+            const session = JSON.parse(sessionData);
+            isAdmin = session.isAdmin || false;
+            isLoggedIn = session.isLoggedIn || false;
+            userToken = session.userToken;
+            adminToken = session.adminToken;
+            currentUser = session.currentUser;
+            return true;
+        }
+    } catch (error) {
+        console.error('Error al cargar sesión:', error);
+    }
+    return false;
+}
+
+function clearSession() {
+    localStorage.removeItem('catalogoSession');
+    isAdmin = false;
+    isLoggedIn = false;
+    userToken = null;
+    adminToken = null;
+    currentUser = null;
+}
+
+async function validateSession() {
+    if (userToken) {
+        try {
+            await getUserProfile();
+            return true;
+        } catch (error) {
+            console.log('Token de usuario inválido, cerrando sesión');
+            clearSession();
+            return false;
+        }
+    }
+    
+    if (adminToken) {
+        try {
+            await fetchOrders();
+            return true;
+        } catch (error) {
+            console.log('Token de admin inválido, cerrando sesión');
+            clearSession();
+            return false;
+        }
+    }
+    
+    return false;
+}
+
+
 // ============= FUNCIONES DE API =============
 
 async function fetchProducts() {
@@ -415,7 +482,15 @@ function renderHeader() {
 
 function renderCatalog() {
     const content = document.getElementById('catalogContent');
-
+     if (!currentProducts || currentProducts.length === 0) {
+        content.innerHTML = `
+            <div class="empty-state">
+                <h3>No hay productos disponibles</h3>
+                <p>Vuelve pronto para ver nuestras novedades</p>
+            </div>
+        `;
+        return;
+    }
     if (currentProducts.length === 0) {
         content.innerHTML = `
             <div class="empty-state">
@@ -1341,8 +1416,7 @@ function proceedToCheckout() {
 }
 
 function logout() {
-    isAdmin = false;
-    adminToken = null;
+    clearSession(); 
     currentSection = 'products';
     document.getElementById('catalogContent').style.display = 'block';
     document.getElementById('ordersContent').style.display = 'none';
@@ -1351,9 +1425,7 @@ function logout() {
 }
 
 function logoutUser() {
-    isLoggedIn = false;
-    userToken = null;
-    currentUser = null;
+    clearSession(); 
     renderHeader();
     location.reload();
 }
@@ -1474,7 +1546,6 @@ async function loadProducts() {
         `;
     }
 }
-
 // ============= EVENT LISTENERS =============
 
 document.getElementById('loginForm').addEventListener('submit', async (e) => {
@@ -1488,6 +1559,7 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
         if (result.success) {
             isAdmin = true;
             adminToken = result.token;
+            saveSession();
             closeModal('loginModal');
             renderHeader();
             renderCatalog();
@@ -1524,6 +1596,7 @@ document.getElementById('registerForm').addEventListener('submit', async (e) => 
             isLoggedIn = true;
             userToken = result.token;
             currentUser = result.user;
+            saveSession();
             closeModal('registerModal');
             renderHeader();
             alert('¡Registro exitoso! Bienvenido ' + result.user.name);
@@ -1546,6 +1619,7 @@ document.getElementById('userLoginForm').addEventListener('submit', async (e) =>
             isLoggedIn = true;
             userToken = result.token;
             currentUser = result.user;
+            saveSession();
             closeModal('userLoginModal');
             renderHeader();
             alert('¡Bienvenido de nuevo ' + result.user.name + '!');
@@ -1568,6 +1642,7 @@ document.getElementById('profileForm').addEventListener('submit', async (e) => {
     try {
         await updateUserProfile(data);
         currentUser = { ...currentUser, ...data };
+        saveSession();
         alert('Perfil actualizado exitosamente');
         closeModal('profileModal');
         renderHeader();
@@ -2075,5 +2150,47 @@ function updateImageFromUrl(url) {
 }
 
 // ============= INICIALIZACIÓN =============
-renderHeader();
-loadProducts();
+async function initializeApp() {
+    const sessionExists = loadSession();
+    
+    if (sessionExists) {
+        console.log('📋 Sesión encontrada, validando...');
+        const isValid = await validateSession();
+        
+        if (!isValid) {
+            console.log('❌ Sesión inválida, limpiando...');
+            clearSession();
+        } else {
+            console.log('✅ Sesión válida restaurada');
+        }
+    }
+    
+    // PRIMERO renderizar el header
+    renderHeader();
+    
+    // LUEGO asegurar que el contenedor correcto esté visible
+    document.getElementById('catalogContent').style.display = 'block';
+    document.getElementById('ordersContent').style.display = 'none';
+    document.getElementById('analyticsContent').style.display = 'none';
+    
+    // CARGAR productos (esto es async, espera a que termine)
+    try {
+        currentProducts = await fetchProducts();
+        console.log('✅ Productos cargados:', currentProducts.length);
+        // DESPUÉS DE CARGAR, renderizar
+        renderCatalog();
+    } catch (error) {
+        console.error('❌ Error cargando productos:', error);
+        const content = document.getElementById('catalogContent');
+        content.innerHTML = `
+            <div class="empty-state">
+                <h3>Error al cargar productos</h3>
+                <p>${error.message}</p>
+            </div>
+        `;
+    }
+    
+    console.log(`🔐 Estado: ${isAdmin ? 'Admin' : isLoggedIn ? 'Usuario' : 'Visitante'}`);
+}
+
+initializeApp();
