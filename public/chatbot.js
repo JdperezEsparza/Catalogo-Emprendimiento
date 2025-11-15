@@ -3,7 +3,7 @@
 // CONFIGURACIÓN - CAMBIA ESTO
 const GEMINI_API_KEY = 'AIzaSyBpdIXc-kXdf-aj9MgqHVLF0L5Uj-aSbNI'; // Obtén en https://makersuite.google.com/app/apikey
 const STORE_NAME = 'La boutique de gertrudis';
-const WHATSAPP_NUMBER = '573115564583';
+const WHATSAPP_NUMBER = '+573115564583';
 
 // Productos (cámbialos por los tuyos)
 // Productos (se cargan automáticamente desde la API)

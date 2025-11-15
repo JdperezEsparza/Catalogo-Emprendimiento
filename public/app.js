@@ -4,11 +4,11 @@ const API_URL = '/api';
 const PAYMENT_CONFIG = {
     whatsappNumber: '573115564583',
     nequiNumber: '311 556 4583',
-    nequiName: 'Tu Nombre Completo',
+    nequiName: 'Juan Pérez',
     bancolombiaAccount: 'XXXX-XXXX-XX',
-    bancolombiaName: 'Tu Nombre Completo',
+    bancolombiaName: 'Aun no disponible',
     daviplataNumber: '311 556 4583',
-    daviplataName: 'Tu Nombre Completo'
+    daviplataName: 'Juan Perez'
 };
 
 const CLOUDINARY_CONFIG = {
